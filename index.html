@@ -8,67 +8,115 @@
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 
     <style>
-        :root { --p: #32b8c6; --bg: #fcfcf9; --text: #134252; --border: rgba(94, 82, 64, 0.2); --err: #c0152f; }
+        :root {
+            --color-primary: #32b8c6;
+            --color-bg: #fcfcf9;
+            --color-surface: #ffffff;
+            --color-text: #134252;
+            --color-text-secondary: #626c71;
+            --color-border: rgba(94, 82, 64, 0.2);
+            --color-error: #c0152f;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 10px; line-height: 1.4; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--color-bg); color: var(--color-text); padding: 10px; line-height: 1.4; }
         .hidden { display: none !important; }
-        .box { background: #fff; padding: 15px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-        input, select, button { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-        button { cursor: pointer; font-weight: bold; border: none; background: var(--p); color: white; }
-        .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 15px; overflow-x: auto; }
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        /* 共通ボックススタイル */
+        section, .box { background: var(--color-surface); border-radius: 10px; border: 1px solid var(--color-border); padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        h2 { font-size: 14px; margin-bottom: 12px; color: var(--color-primary); border-bottom: 1px solid var(--color-border); padding-bottom: 5px; }
+        
+        /* 入力要素 */
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--color-border); font-size: 16px; margin-bottom: 10px; background: white; appearance: none; }
+        button { width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; margin-bottom: 10px; font-size: 15px; }
+        .btn-add { background: var(--color-primary); color: white; }
+        .btn-save { background: #208d8d; color: white; margin: 20px 0; }
+        .btn-del { background: none; border: 1px solid var(--color-error); color: var(--color-error); padding: 5px; font-size: 11px; margin-top: 5px; width: auto; }
+        
+        /* タブ */
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); margin-bottom: 15px; overflow-x: auto; }
         .tab-btn { background: none; border: none; padding: 12px; color: #666; font-size: 14px; flex: 1; white-space: nowrap; }
-        .tab-btn.active { color: var(--p); border-bottom: 3px solid var(--p); font-weight: bold; }
+        .tab-btn.active { color: var(--color-primary); border-bottom: 3px solid var(--color-primary); font-weight: bold; }
+        
+        /* 商品・計算結果 */
+        .product-item { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #eee; }
+        .summary-box { background: #f0fbfc; border-left: 5px solid var(--color-primary); padding: 15px; border-radius: 5px; margin-top: 10px; }
         .summary-row { display: flex; justify-content: space-between; font-size: 14px; border-bottom: 1px dotted #ccc; padding: 6px 0; }
-        .btn-del { background: none; border: 1px solid var(--err); color: var(--err); font-size: 11px; padding: 5px; width: auto; margin-top: 5px; }
-        h2 { font-size: 14px; color: var(--p); border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 10px; }
+        .row { display: flex; gap: 8px; }
+        .row > * { flex: 1; }
+        .receipt-list { background: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px dashed var(--color-border); font-size: 13px; }
     </style>
 </head>
 <body>
 
-<div id="setupScreen" class="box" style="margin-top: 50px;">
-    <h2>【初回設定】合言葉を決めてください</h2>
-    <p style="font-size:12px; margin-bottom:10px; color:#666;">
-        Safariの履歴を消しても、この「合言葉」を入れるだけで設定が復活します。好きな言葉（例：名前など）を決めてください。
-    </p>
-    <input type="text" id="secretKeyInput" placeholder="例: tanaka-keisan">
-    <button onclick="setupKey()">アプリを開始する</button>
-</div>
-
-<div id="mainContent" class="hidden">
-    <header style="text-align:center; padding-bottom:10px;">
-        <h1 style="font-size:18px;">分割手数料計算アプリ</h1>
-        <div id="keyDisplay" style="font-size:10px; color:#999;"></div>
+<div class="container">
+    <header style="text-align:center; padding: 15px 0;">
+        <h1 style="font-size:20px;">分割手数料計算アプリ</h1>
+        <div id="keyDisplay" style="font-size:10px; color:#999; margin-top:5px;"></div>
     </header>
 
-    <div class="tabs">
-        <button class="tab-btn active" id="tab-calc" onclick="switchTab('calculator')">計算</button>
-        <button class="tab-btn" id="tab-hist" onclick="switchTab('history')">履歴</button>
-        <button class="tab-btn" id="tab-pref" onclick="switchTab('preset')">設定管理</button>
+    <div id="setupScreen" class="box" style="margin-top: 30px;">
+        <h2>クラウド保存用の合言葉</h2>
+        <p style="font-size:12px; margin-bottom:10px; color:#666;">
+            Safariの履歴を消しても、この「合言葉」を入れるだけでデータが復活します。
+        </p>
+        <input type="text" id="secretKeyInput" placeholder="例: tanaka-app">
+        <button class="btn-add" onclick="setupKey()">アプリを開始する</button>
     </div>
 
-    <div id="calculator" class="tab-page">
-        <div class="box">
-            <h2>基本設定</h2>
-            <select id="custType" onchange="calc()">
-                <option value="student">修科生</option>
-                <option value="member">しゅう美会生</option>
-            </select>
-            <div id="prodList"></div>
-            <button onclick="addProd()">+ 商品を追加</button>
+    <div id="mainContent" class="hidden">
+        <div class="tabs">
+            <button class="tab-btn active" id="btn-calc" onclick="switchTab('calculator')">計算</button>
+            <button class="tab-btn" id="btn-hist" onclick="switchTab('history')">履歴</button>
+            <button class="tab-btn" id="btn-set" onclick="switchTab('preset')">リスト管理</button>
         </div>
-        <div id="cardArea"></div>
-        <button style="background:#208d8d;" onclick="saveHist()">結果を履歴に保存</button>
-        <div id="resBox" class="box hidden" style="background:#f0fbfc;"><div id="resDets"></div></div>
-    </div>
 
-    <div id="history" class="tab-page hidden"><div id="histSection"></div></div>
+        <div id="calculator" class="tab-page">
+            <section>
+                <h2>基本情報</h2>
+                <label style="font-size:11px; font-weight:bold;">顧客種別</label>
+                <select id="custType" onchange="updateCalc()">
+                    <option value="student">修科生</option>
+                    <option value="member">しゅう美会生</option>
+                    <option value="instructor">講師</option>
+                </select>
+            </section>
+            
+            <section>
+                <h2>商品情報</h2>
+                <div id="prodList"></div>
+                <button class="btn-add" onclick="addProd()">+ 商品を追加</button>
+            </section>
 
-    <div id="preset" class="tab-page hidden">
-        <button onclick="localStorage.clear(); location.reload();" style="background:none; border:1px solid var(--err); color:var(--err); font-size:12px;">合言葉を変更（リセット）</button>
-        <div class="box"><h2>カード名</h2><div id="setCards"></div><button onclick="addCard()">+ 追加</button></div>
-        <div class="box"><h2>ガード価格</h2><div id="setGuard"></div><button onclick="addPre('guard')">+ 追加</button></div>
-        <div class="box"><h2>裏物価格</h2><div id="setLining"></div><button onclick="addPre('lining')">+ 追加</button></div>
-        <div class="box"><h2>カテゴリー割引率(%)</h2><div id="setCatDisc"></div></div>
+            <div id="cardSelectArea"></div>
+
+            <button class="btn-save" onclick="saveHist()">計算結果を保存</button>
+
+            <div id="resSection" class="hidden">
+                <section>
+                    <h2>計算結果</h2>
+                    <div id="sumDetails" class="summary-box"></div>
+                </section>
+            </div>
+        </div>
+
+        <div id="history" class="tab-page hidden">
+            <div id="histSection"></div>
+        </div>
+
+        <div id="preset" class="tab-page hidden">
+            <section style="background:#fff0f0;">
+                <button onclick="localStorage.clear(); location.reload();" style="border:1px solid red; color:red; background:white; font-size:12px; padding:8px;">合言葉を変更（リセット）</button>
+            </section>
+            <section><h2>カード種類管理</h2><div id="setCards"></div><button class="btn-add" onclick="addCardType()">+ カード追加</button></section>
+            <section><h2>カード手数料管理(%)</h2><div id="setCardFees"></div></section>
+            <section><h2>スキップ手数料管理(%)</h2><div id="setSkipFees"></div></section>
+            <section><h2>ガード管理</h2><div id="setGuard"></div><button class="btn-add" onclick="addPre('guard')">+ 追加</button></section>
+            <section><h2>裏物管理</h2><div id="setLining"></div><button class="btn-add" onclick="addPre('lining')">+ 追加</button></section>
+            <section><h2>仕立管理</h2><div id="setTailor"></div><button class="btn-add" onclick="addPre('tailor')">+ 追加</button></section>
+            <section><h2>その他管理</h2><div id="setOther"></div><button class="btn-add" onclick="addPre('other')">+ 追加</button></section>
+            <section><h2>その他カテゴリー基本割引設定(%)</h2><div id="setCatDisc"></div></section>
+        </div>
     </div>
 </div>
 
@@ -86,11 +134,12 @@
     const db = firebase.firestore();
 
     let myKey = "";
-    let data = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, hist:[] };
+    let data = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, hist:[] };
     let prods = [];
     const labels = { kimono_awase:"着物(袷)", kimono_hitoe:"着物(単衣)", homongi_awase:"訪問着(袷)", obi:"帯", small:"小物", guard:"ガード", lining:"裏物", tailor:"仕立", other:"その他" };
     const cats = ["kimono_awase","kimono_hitoe","homongi_awase","obi","small"];
 
+    // --- データ保存・読込 ---
     async function setupKey() {
         const k = document.getElementById("secretKeyInput").value.trim();
         if(!k) return alert("合言葉を入力してください");
@@ -103,10 +152,19 @@
         if(doc.exists) {
             data = doc.data();
         } else {
-            // デフォルトデータ
-            data.preset = { guard:[{id:1,name:"ガード(標準)",price:3000}], lining:[{id:2,name:"裏物(標準)",price:2000}], tailor:[{id:3,name:"仕立(標準)",price:15000}], other:[] };
-            data.cards = [{id:"j",name:"ジャックス",pay:{1:0,12:1.2,24:8.4},skip:{0:0,1:0.5}}];
-            cats.forEach(c => data.catDisc[c] = {student:0, member:0});
+            // URLの内容に合わせたデフォルトデータ初期化
+            data.preset = { 
+                guard:[{id:1,name:"ガード(標準)",price:3000}], 
+                lining:[{id:2,name:"裏物(標準)",price:2000}], 
+                tailor:[{id:3,name:"仕立(標準)",price:15000}], 
+                other:[] 
+            };
+            data.cards = [
+                {id:"j",name:"ジャックス",pay:{1:0,12:1.2,24:8.4},skip:{0:0,1:0.5}},
+                {id:"k",name:"KL",pay:{1:0,12:1.0,24:5.2},skip:{0:0,1:0.5}}
+            ];
+            cats.forEach(c => data.catDisc[c] = {student:0, member:0, instructor:0});
+            data.hist = []; data.prodDisc = {};
             await saveData();
         }
         document.getElementById("setupScreen").classList.add("hidden");
@@ -118,80 +176,139 @@
 
     async function saveData() { if(myKey) await db.collection("shared_users").doc(myKey).set(data); }
 
+    // --- 計算・UI ---
     function addProd() { prods.push({id:Date.now(), cat:"kimono_awase", price:""}); renderProds(); }
     function renderProds() {
         document.getElementById("prodList").innerHTML = prods.map(p => {
             const isPre = ["guard","lining","tailor","other"].includes(p.cat);
-            return `<div class="box" style="background:#f9f9f9; padding:10px;">
-                <select onchange="prods.find(x=>x.id==${p.id}).cat=this.value; renderProds(); calc();">
+            const opts = isPre ? data.preset[p.cat] : [];
+            return `<div class="product-item">
+                <select onchange="const pd=prods.find(x=>x.id==${p.id}); pd.cat=this.value; pd.price=''; pd.preId=''; renderProds(); updateCalc();">
                     ${Object.keys(labels).map(k=>`<option value="${k}" ${p.cat===k?'selected':''}>${labels[k]}</option>`).join('')}
                 </select>
-                ${isPre ? `<select onchange="const pt=data.preset['${p.cat}'].find(x=>x.id==this.value); if(pt){ prods.find(x=>x.id==${p.id}).price=pt.price; calc(); }"><option>-- 選択 --</option>${data.preset[p.cat].map(o=>`<option value="${o.id}">${o.name}(¥${o.price})</option>`).join('')}</select>` 
-                : `<input type="number" value="${p.price}" placeholder="金額" oninput="prods.find(x=>x.id==${p.id}).price=this.value; calc();">`}
-                <button class="btn-del" onclick="prods=prods.filter(x=>x.id!=${p.id}); renderProds(); calc();">削除</button></div>`;
+                ${isPre ? `<select onchange="const pt=data.preset['${p.cat}'].find(x=>x.id==this.value); if(pt){ const pd=prods.find(x=>x.id==${p.id}); pd.price=pt.price; pd.preId=pt.id; updateCalc(); }"><option>-- 選択 --</option>${opts.map(o=>`<option value="${o.id}" ${p.preId==o.id?'selected':''}>${o.name}(¥${o.price})</option>`).join('')}</select>` 
+                : `<input type="number" placeholder="金額" value="${p.price}" oninput="prods.find(x=>x.id==${p.id}).price=this.value; updateCalc();">`}
+                <button class="btn-del" onclick="prods=prods.filter(x=>x.id!=${p.id}); renderProds(); updateCalc();">削除</button></div>`;
         }).join('');
     }
 
-    function renderCards() {
-        document.getElementById("cardArea").innerHTML = data.cards.map(c => `
-            <div class="box"><b>${c.name}</b><div style="display:flex;gap:5px;">
-            <select id="p_${c.id}" onchange="calc()">${Object.keys(c.pay).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select>
-            <select id="s_${c.id}" onchange="calc()"><option value="0">スキップなし</option>${Object.keys(c.skip||{}).map(k=>k!=0?`<option value="${k}">${k}ヶ月</option>`:'').join('')}</select>
-            </div></div>`).join('');
+    function renderCardInputs() {
+        document.getElementById("cardSelectArea").innerHTML = data.cards.map(c => `
+            <section><h2>${c.name} 設定</h2><div class="row">
+            <div style="flex:1;"><label style="font-size:10px;">回数</label><select id="p_${c.id}" onchange="updateCalc()">${Object.keys(c.pay).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div>
+            <div style="flex:1;"><label style="font-size:10px;">スキップ</label><select id="s_${c.id}" onchange="updateCalc()"><option value="0">なし</option>${Object.keys(c.skip||{}).map(k=>k!=0?`<option value="${k}">${k}ヶ月</option>`:'').join('')}</select></div>
+            </div></section>`).join('');
     }
 
-    function calc() {
-        if(prods.length===0) return;
+    function updateCalc() {
+        if(prods.length===0 || prods.every(p => !p.price)) { document.getElementById("resSection").classList.add("hidden"); return; }
         const type = document.getElementById("custType").value;
-        let tB = 0, tD = 0, tA = 0;
+        let tB = 0, tD = 0, tA = 0, lines = [];
         prods.forEach(p => {
-            const pr = parseFloat(p.price)||0;
-            const rt = data.catDisc[p.cat] ? (data.catDisc[p.cat][type]||0) : 0;
-            const d = pr*(rt/100); tB += pr; tD += d; tA += (pr-d);
+            const price = parseFloat(p.price)||0;
+            let rate = 0;
+            if(cats.includes(p.cat)) rate = data.catDisc[p.cat]?.[type]||0;
+            else if(p.preId) rate = (data.prodDisc[`${p.cat}_${p.preId}`]?.[type]) || 0;
+            const disc = price*(rate/100);
+            tB += price; tD += disc; tA += (price-disc);
+            lines.push(`<div class="summary-row"><span>${labels[p.cat]}</span><span>¥${Math.round(price).toLocaleString()}</span></div>`);
         });
-        let h = `<div class="summary-row"><span>値引前合計</span><span>¥${Math.round(tB).toLocaleString()}</span></div>
-                 <div class="summary-row"><span style="color:red;">値引額</span><span style="color:red;">-¥${Math.round(tD).toLocaleString()}</span></div>
-                 <div class="summary-row" style="font-weight:bold; font-size:16px;"><span>支払対象額</span><span>¥${Math.round(tA).toLocaleString()}</span></div><hr>`;
+
+        let h = `<div class="receipt-list"><b style="color:var(--color-primary);">商品明細</b>${lines.join('')}</div>
+                 <div class="summary-row"><span>値引前合計</span><span>¥${Math.round(tB).toLocaleString()}</span></div>
+                 <div class="summary-row"><span style="color:red;">値引額合計</span><span style="color:red;">-¥${Math.round(tD).toLocaleString()}</span></div>
+                 <div class="summary-row" style="font-weight:bold; font-size:16px; border-bottom:2px solid var(--color-primary);"><span>お支払対象額</span><span>¥${Math.round(tA).toLocaleString()}</span></div><hr style="margin:10px 0;">`;
+
         data.cards.forEach(c => {
-            const pay = document.getElementById(`p_${c.id}`).value;
-            const skp = document.getElementById(`s_${c.id}`).value;
-            const rate = (c.pay[pay]||0) + (c.skip[skp]||0);
+            const pay = parseInt(document.getElementById(`p_${c.id}`).value);
+            const skp = parseInt(document.getElementById(`s_${c.id}`).value);
+            const rate = (parseFloat(c.pay[pay])||0) + (parseFloat(c.skip?.[skp])||0);
             const fee = Math.floor(tA * (rate/100)); const fin = tA + fee;
-            h += `<div style="margin-top:10px;"><b style="color:var(--p);">${c.name} (${pay}回)</b>
-                <div class="summary-row"><span>手数料</span><span>¥${fee.toLocaleString()}</span></div>
-                <div class="summary-row"><span>合計</span><b>¥${fin.toLocaleString()}</b></div>
-                <div class="summary-row"><span>月々</span><b>¥${Math.floor(fin/pay).toLocaleString()}</b></div></div>`;
+            h += `<div style="margin-top:12px;"><b style="color:var(--color-primary);">${c.name} (${pay}回)</b>
+                <div class="summary-row"><span>分割手数料</span><span>¥${fee.toLocaleString()}</span></div>
+                <div class="summary-row"><span>最終合計額</span><b style="font-size:15px; color:var(--color-primary);">¥${fin.toLocaleString()}</b></div>
+                <div class="summary-row"><span>月々のお支払</span><b style="font-size:15px; color:var(--color-primary);">¥${Math.floor(fin/pay).toLocaleString()}</b></div></div>`;
         });
-        document.getElementById("resDets").innerHTML = h;
-        document.getElementById("resBox").classList.remove("hidden");
+        document.getElementById("sumDetails").innerHTML = h;
+        document.getElementById("resSection").classList.remove("hidden");
     }
 
     async function saveHist() {
-        data.hist.unshift({date:Date.now(), txt:document.getElementById("resDets").innerText.split('\n')[2]});
-        if(data.hist.length>20) data.hist.pop(); await saveData(); alert("保存しました");
+        const details = document.getElementById("sumDetails").innerHTML;
+        data.hist.unshift({date:Date.now(), html:details});
+        if(data.hist.length>30) data.hist.pop();
+        await saveData(); renderHistory(); alert("保存しました");
+    }
+
+    function renderHistory() {
+        document.getElementById("histSection").innerHTML = data.hist.length ? data.hist.map((h, i) => `
+            <div class="box">
+                <p style="font-size:11px; color:#999;">${new Date(h.date).toLocaleString()}</p>
+                ${h.html}
+                <button class="btn-del" onclick="data.hist.splice(${i},1); saveData(); renderHistory();">削除</button>
+            </div>`).join('') : '<p style="text-align:center; padding:20px; color:#999;">履歴はありません</p>';
     }
 
     function switchTab(name) {
         document.querySelectorAll(".tab-page").forEach(p=>p.classList.add("hidden"));
         document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
         document.getElementById(name).classList.remove("hidden");
-        document.getElementById("tab-" + name.substring(0,4)).classList.add("active");
+        document.getElementById("btn-" + name.substring(0,4)).classList.add("active");
         if(name==="preset") renderSettings();
+        if(name==="history") renderHistory();
     }
 
+    // --- リスト管理のレンダリング ---
     function renderSettings() {
-        document.getElementById("setCards").innerHTML = data.cards.map((c,i)=>`<input value="${c.name}" onchange="data.cards[${i}].name=this.value;saveData();">`).join('');
-        document.getElementById("setCatDisc").innerHTML = cats.map(c=>`<div class="summary-row"><span>${labels[c]}</span><div style="display:flex;gap:5px;"><input type="number" value="${data.catDisc[c].student}" onchange="data.catDisc['${c}'].student=this.value;saveData();"><input type="number" value="${data.catDisc[c].member}" onchange="data.catDisc['${c}'].member=this.value;saveData();"></div></div>`).join('');
-        ["guard","lining","tailor"].forEach(cat => {
-            document.getElementById("set" + cat.charAt(0).toUpperCase() + cat.slice(1)).innerHTML = data.preset[cat].map((p,i)=>`<div class="box"><input value="${p.name}" onchange="data.preset['${cat}'][${i}].name=this.value;saveData();"><input type="number" value="${p.price}" onchange="data.preset['${cat}'][${i}].price=this.value;saveData();"></div>`).join('');
+        document.getElementById("setCards").innerHTML = data.cards.map((c,i)=>`<div class="product-item"><input value="${c.name}" onchange="data.cards[${i}].name=this.value;saveData();renderAll();"></div>`).join('');
+        
+        document.getElementById("setCardFees").innerHTML = data.cards.map((c,i) => `
+            <div class="box"><b style="font-size:12px;">${c.name}</b>
+                ${Object.keys(c.pay).map(k => `<div class="summary-row"><span>${k}回払い</span><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.pay[k]}" onchange="data.cards[${i}].pay[${k}]=this.value;saveData();updateCalc();"></div>`).join('')}
+                <button style="padding:5px; font-size:11px;" onclick="const v=prompt('何回払い？'); if(v){data.cards[${i}].pay[v]=0;renderSettings();}">+ 回数追加</button>
+            </div>`).join('');
+
+        document.getElementById("setSkipFees").innerHTML = data.cards.map((c,i) => `
+            <div class="box"><b style="font-size:12px;">${c.name}</b>
+                ${Object.keys(c.skip||{}).map(k => `<div class="summary-row"><span>${k}ヶ月スキップ</span><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.skip[k]}" onchange="data.cards[${i}].skip[${k}]=this.value;saveData();updateCalc();"></div>`).join('')}
+                <button style="padding:5px; font-size:11px;" onclick="const v=prompt('何ヶ月スキップ？'); if(v){data.cards[${i}].skip[v]=0;renderSettings();}">+ スキップ追加</button>
+            </div>`).join('');
+
+        document.getElementById("setCatDisc").innerHTML = cats.map(c=>`
+            <div class="product-item"><label>${labels[c]}</label>
+            <div class="row"><input type="number" value="${data.catDisc[c].student}" onchange="data.catDisc['${c}'].student=this.value;saveData();" placeholder="修科"><input type="number" value="${data.catDisc[c].member}" onchange="data.catDisc['${c}'].member=this.value;saveData();" placeholder="しゅう"><input type="number" value="${data.catDisc[c].instructor}" onchange="data.catDisc['${c}'].instructor=this.value;saveData();" placeholder="講師"></div></div>`).join('');
+        
+        ["guard","lining","tailor","other"].forEach(cat => {
+            document.getElementById("set" + cat.charAt(0).toUpperCase() + cat.slice(1)).innerHTML = data.preset[cat].map((p,i)=>{
+                const d = data.prodDisc[`${cat}_${p.id}`] || {student:0, member:0, instructor:0};
+                return `<div class="product-item">
+                    <input value="${p.name}" onchange="data.preset['${cat}'][${i}].name=this.value;saveData();renderProds();">
+                    <input type="number" value="${p.price}" onchange="data.preset['${cat}'][${i}].price=this.value;saveData();updateCalc();">
+                    <div style="font-size:10px; margin-bottom:5px;">個別割引率(修/しゅう/講):</div>
+                    <div class="row">
+                        <input type="number" value="${d.student}" onchange="updateProdDisc('${cat}',${p.id},'student',this.value)">
+                        <input type="number" value="${d.member}" onchange="updateProdDisc('${cat}',${p.id},'member',this.value)">
+                        <input type="number" value="${d.instructor}" onchange="updateProdDisc('${cat}',${p.id},'instructor',this.value)">
+                    </div>
+                    <button class="btn-del" onclick="data.preset['${cat}'].splice(${i},1); saveData(); renderSettings();">削除</button>
+                </div>`;
+            }).join('');
         });
     }
 
-    function addCard() { data.cards.push({id:"c"+Date.now(), name:"新規", pay:{1:0}, skip:{0:0}}); saveData(); renderSettings(); renderCards(); }
-    function addPre(c) { data.preset[c].push({id:Date.now(), name:"新規", price:0}); saveData(); renderSettings(); }
+    function updateProdDisc(cat, id, type, val) {
+        const k = `${cat}_${id}`;
+        if(!data.prodDisc[k]) data.prodDisc[k] = {student:0, member:0, instructor:0};
+        data.prodDisc[k][type] = parseFloat(val);
+        saveData();
+    }
 
-    function renderAll() { renderCards(); }
+    function addCardType() { const id="c"+Date.now(); data.cards.push({id:id, name:"新規カード", pay:{1:0,12:0}, skip:{0:0}}); saveData(); renderSettings(); renderCardInputs(); }
+    function addPre(c) { data.preset[c].push({id:Date.now(), name:"新規項目", price:0}); saveData(); renderSettings(); }
 
+    function renderAll() { renderCardInputs(); renderHistory(); }
+
+    // 起動処理
     const k = localStorage.getItem("my_app_key");
     if(k) { myKey = k; loadData(); }
 </script>
