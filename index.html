@@ -3,81 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算アプリ Pro v6</title>
+    <title>分割手数料計算アプリ Pro FINAL</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 
     <style>
         :root {
-            --color-primary: #32b8c6;
-            --color-bg: #fcfcf9;
-            --color-surface: #ffffff;
-            --color-text: #134252;
-            --color-text-secondary: #626c71;
-            --color-border: rgba(94, 82, 64, 0.2);
-            --color-error: #c0152f;
+            --p: #32b8c6; --bg: #fcfcf9; --surf: #ffffff; --text: #134252; --sub: #626c71; --border: rgba(94, 82, 64, 0.2); --err: #c0152f;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, sans-serif; background-color: var(--color-bg); color: var(--color-text); padding: 12px; line-height: 1.5; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg); color: var(--text); padding: 12px; line-height: 1.5; }
         .hidden { display: none !important; }
         .container { max-width: 600px; margin: 0 auto; }
         
-        section, .box { background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-border); padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-        h2 { font-size: 15px; margin-bottom: 15px; color: var(--color-primary); border-bottom: 1px solid var(--color-border); padding-bottom: 8px; font-weight: bold; }
+        section, .box { background: var(--surf); border-radius: 12px; border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        h2 { font-size: 15px; margin-bottom: 15px; color: var(--p); border-bottom: 2px solid var(--border); padding-bottom: 8px; font-weight: bold; }
         
-        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--color-border); font-size: 16px; margin-bottom: 10px; background: white; appearance: none; }
-        label { display: block; font-size: 12px; font-weight: bold; color: var(--color-text-secondary); margin-bottom: 4px; }
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 16px; margin-bottom: 10px; background: white; appearance: none; }
+        label { display: block; font-size: 11px; font-weight: bold; color: var(--sub); margin-bottom: 4px; }
         
         button { width: 100%; padding: 14px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font-size: 15px; transition: all 0.2s; }
-        .btn-add { background: var(--color-primary); color: white; margin-bottom: 12px; }
+        .btn-add { background: var(--p); color: white; margin-bottom: 12px; }
         .btn-save { background: #208d8d; color: white; margin: 20px 0; }
-        .btn-del { background: #fff5f5; color: var(--color-error); border: 1px solid var(--color-error); padding: 5px 10px; font-size: 11px; width: auto; border-radius: 4px; }
-        .btn-mini-add { background: #e0f2f1; color: var(--color-primary); border: 1px solid var(--color-primary); padding: 5px 10px; font-size: 11px; width: auto; border-radius: 4px; }
+        .btn-del { background: #fff5f5; color: var(--err); border: 1px solid var(--err); padding: 6px 12px; font-size: 11px; width: auto; margin-top: 5px; border-radius: 4px; }
+        .btn-mini-add { background: #e0f2f1; color: var(--p); border: 1px solid var(--p); padding: 5px 10px; font-size: 11px; width: auto; border-radius: 4px; margin-bottom: 10px; }
 
-        .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--color-border); margin-bottom: 16px; }
+        .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
         .tab-btn { background: none; border: none; padding: 12px; color: #666; font-size: 14px; flex: 1; border-bottom: 3px solid transparent; }
-        .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: bold; }
+        .tab-btn.active { color: var(--p); border-bottom-color: var(--p); font-weight: bold; }
 
-        /* レシート明細 */
+        /* レシート表示 */
         .receipt { background: #fff; border: 1px dashed #bbb; padding: 20px; font-family: monospace; font-size: 13px; color: #333; }
         .receipt-title { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; }
         .receipt-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
         .receipt-hr { border-top: 1px dashed #ccc; margin: 10px 0; }
-        .receipt-total { font-size: 17px; font-weight: bold; color: var(--color-text); }
-        .card-res { background: #f0fbfc; border-left: 5px solid var(--color-primary); padding: 15px; border-radius: 8px; margin-top: 12px; }
+        .receipt-total { font-size: 17px; font-weight: bold; }
+        .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 15px; border-radius: 8px; margin-top: 12px; }
 
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-        .grid-3 input { text-align: center; padding: 8px; font-size: 14px; }
-        .flex-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .grid-3 input { text-align: center; padding: 8px; font-size: 13px; }
+        .flex-center { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="setupView" class="box" style="margin-top: 40px;">
+    <div id="setupScreen" class="box" style="margin-top: 40px;">
         <h2 style="text-align:center;">クラウド保存・同期設定</h2>
-        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">専用の「合言葉」を入力して開始してください。</p>
-        <input type="text" id="secretKey" placeholder="例: tanaka-app">
-        <button class="btn-add" onclick="launchApp()">アプリを起動</button>
+        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">
+            専用の「合言葉」を入力して開始してください。<br>履歴を消去しても同じ言葉でデータを復元できます。
+        </p>
+        <input type="text" id="secretInput" placeholder="例: tanaka-keisan">
+        <button class="btn-add" onclick="initApp()">アプリを起動</button>
     </div>
 
     <div id="mainView" class="hidden">
-        <header style="text-align:center; padding: 15px 0;">
-            <h1 style="font-size:18px; color:var(--color-primary);">分割手数料計算 Pro</h1>
-            <div id="keyIndicator" style="font-size:10px; color:#999;"></div>
+        <header style="text-align:center; padding-bottom:15px;">
+            <h1 style="font-size:18px; color:var(--p);">分割手数料計算 Pro</h1>
+            <div id="keyTag" style="font-size:10px; color:#999;"></div>
         </header>
 
         <div class="tabs">
-            <button class="tab-btn active" id="tab-calc" onclick="switchPage('calculator')">計算</button>
-            <button class="tab-btn" id="tab-hist" onclick="switchPage('history')">履歴</button>
-            <button class="tab-btn" id="tab-set" onclick="switchPage('preset')">リスト管理</button>
+            <button class="tab-btn active" id="tab-calc" onclick="showPage('calculator')">計算</button>
+            <button class="tab-btn" id="tab-hist" onclick="showPage('history')">履歴</button>
+            <button class="tab-btn" id="tab-set" onclick="showPage('preset')">リスト管理</button>
         </div>
 
         <div id="page-calculator" class="page-content">
             <section>
                 <h2>基本情報</h2>
-                <label>顧客種別</label>
-                <select id="custType" onchange="runCalc()">
+                <label>顧客種別を選択</label>
+                <select id="custType" onchange="calcLogic()">
                     <option value="student">修科生</option>
                     <option value="member">しゅう美会生</option>
                     <option value="instructor">講師</option>
@@ -85,60 +81,65 @@
             </section>
             
             <section>
-                <h2>商品明細</h2>
-                <div id="calcInputList"></div>
-                <button class="btn-add" onclick="addRow()">+ 商品を追加</button>
+                <h2>商品情報</h2>
+                <div id="inputRowList"></div>
+                <button class="btn-add" onclick="addNewRow()">+ 商品を追加</button>
             </section>
 
-            <div id="cardQuickSettingArea"></div>
+            <div id="cardQuickSelectArea"></div>
 
             <button class="btn-save" onclick="saveToHistory()">計算結果を履歴に保存</button>
 
-            <div id="calcOutput" class="hidden">
+            <div id="calcOutputView" class="hidden">
                 <section>
                     <h2>計算結果（明細レシート）</h2>
                     <div id="receiptUI" class="receipt"></div>
-                    <div id="cardResultList"></div>
+                    <div id="cardResultsUI"></div>
                 </section>
             </div>
         </div>
 
         <div id="page-history" class="page-content hidden">
-            <div id="historyContainer"></div>
+            <div id="historyListArea"></div>
         </div>
 
         <div id="page-preset" class="page-content hidden">
             <section style="background:#fff0f0;">
-                <button onclick="localStorage.clear(); location.reload();" style="background:none; border:1px solid red; color:red; font-size:11px; padding:5px;">合言葉をリセット</button>
+                <button onclick="localStorage.clear(); location.reload();" style="background:none; border:1px solid red; color:red; font-size:11px; padding:5px;">合言葉のリセット</button>
             </section>
-            
+
             <section>
                 <h2>カード種類管理</h2>
-                <div id="cardNamesSetting"></div>
-                <button class="btn-add" onclick="addCardType()">+ カード種類を追加</button>
+                <div id="manageCardNames"></div>
+                <button class="btn-mini-add" onclick="addCardType()">+ カードを追加</button>
             </section>
 
             <section>
                 <h2>カード手数料設定(%)</h2>
-                <div id="cardFeesSetting"></div>
+                <div id="manageCardFees"></div>
             </section>
 
             <section>
                 <h2>スキップ手数料設定(%)</h2>
-                <div id="skipFeesSetting"></div>
+                <div id="manageSkipFees"></div>
             </section>
 
-            <section><h2>ガード管理</h2><div id="setGuard"></div><button class="btn-add" onclick="addPresetItem('guard')">+ ガードを追加</button></section>
-            <section><h2>裏物管理</h2><div id="setLining"></div><button class="btn-add" onclick="addPresetItem('lining')">+ 裏物を追加</button></section>
-            <section><h2>仕立管理</h2><div id="setTailor"></div><button class="btn-add" onclick="addPresetItem('tailor')">+ 仕立を追加</button></section>
-            <section><h2>その他管理</h2><div id="setOther"></div><button class="btn-add" onclick="addPresetItem('other')">+ その他を追加</button></section>
-            <section><h2>カテゴリー割引率設定(%)</h2><div id="setCatDiscount"></div></section>
+            <section><h2>ガード管理</h2><div id="manageGuard"></div><button class="btn-mini-add" onclick="addPresetItem('guard')">+ 追加</button></section>
+            <section><h2>裏物管理</h2><div id="manageLining"></div><button class="btn-mini-add" onclick="addPresetItem('lining')">+ 追加</button></section>
+            <section><h2>仕立管理</h2><div id="manageTailor"></div><button class="btn-mini-add" onclick="addPresetItem('tailor')">+ 追加</button></section>
+            <section><h2>その他管理</h2><div id="manageOther"></div><button class="btn-mini-add" onclick="addPresetItem('other')">+ 追加</button></section>
+            
+            <section>
+                <h2>カテゴリー割引設定</h2>
+                <div id="manageCategories"></div>
+                <button class="btn-mini-add" onclick="addCustomCategory()">+ カテゴリーを追加</button>
+            </section>
         </div>
     </div>
 </div>
 
 <script>
-    // --- Firebase構成 ---
+    // --- Firebase初期化 ---
     const fbConfig = {
         apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
         authDomain: "my-app-eb01f.firebaseapp.com",
@@ -151,149 +152,158 @@
     const db = firebase.firestore();
 
     let appKey = "";
-    let appData = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[] };
+    let data = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let currentRows = [];
 
-    const CAT_LABELS = {
+    // 固定カテゴリーの初期定義
+    const defaultCats = {
         kimono_awase:"着物(袷)", kimono_hitoe:"着物(単衣)", homongi_awase:"訪問着(袷)", homongi_hitoe:"訪問着(単衣)",
         tsukesage_awase:"付下げ(袷)", tsukesage_hitoe:"付下げ(単衣)", tsukesage_summer:"付下げ(夏物)",
         nagajuban_awase:"長襦袢(袷)", nagajuban_hitoe:"長襦袢(単衣)", coat_awase:"コート(袷)", coat_hitoe:"コート(単衣)",
-        obi:"帯", small:"小物", guard:"ガード", lining:"裏物", tailor:"仕立", other:"その他"
+        obi:"帯", small:"小物"
     };
-    const BASE_CATS = ["kimono_awase","kimono_hitoe","homongi_awase","homongi_hitoe","tsukesage_awase","tsukesage_hitoe","tsukesage_summer","nagajuban_awase","nagajuban_hitoe","coat_awase","coat_hitoe","obi","small"];
 
-    // --- 起動 & 同期 ---
-    async function launchApp() {
-        const k = document.getElementById("secretKey").value.trim();
+    // --- 同期と保存 ---
+    async function initApp() {
+        const k = document.getElementById("secretInput").value.trim();
         if(!k) return alert("合言葉を入力してください");
         appKey = k;
-        localStorage.setItem("v6_app_key", appKey);
+        localStorage.setItem("v7_app_key", appKey);
         await syncData();
     }
 
     async function syncData() {
         const doc = await db.collection("shared_users").doc(appKey).get();
         if(doc.exists) {
-            appData = doc.data();
-            if(!appData.history) appData.history = [];
+            data = doc.data();
+            if(!data.history) data.history = [];
+            if(!data.customCats) data.customCats = [];
         } else {
-            // 初期データの生成
-            appData.preset = { guard:[], lining:[], tailor:[], other:[] };
-            appData.cards = [{ id:"j", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3} }];
-            BASE_CATS.forEach(c => appData.catDisc[c] = {student:0, member:0, instructor:0});
-            await saveRemote();
+            // マスター初期データ作成
+            data.cards = [{ id:"j", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3} }];
+            data.customCats = Object.entries(defaultCats).map(([k, v]) => ({id:k, name:v}));
+            data.customCats.forEach(c => data.catDisc[c.id] = {student:0, member:0, instructor:0});
+            await pushData();
         }
-        document.getElementById("setupView").classList.add("hidden");
+        document.getElementById("setupScreen").classList.add("hidden");
         document.getElementById("mainView").classList.remove("hidden");
-        document.getElementById("keyIndicator").innerText = "合言葉: " + appKey;
-        refreshAllUI();
-        if(!currentRows.length) addRow();
+        document.getElementById("keyTag").innerText = "接続先合言葉: " + appKey;
+        refreshUI();
+        if(!currentRows.length) addNewRow();
     }
 
-    async function saveRemote() { if(appKey) await db.collection("shared_users").doc(appKey).set(appData); }
+    async function pushData() { if(appKey) await db.collection("shared_users").doc(appKey).set(data); }
 
     // --- 計算ロジック ---
-    function addRow() { currentRows.push({id:Date.now(), cat:"kimono_awase", price:""}); renderCalcRows(); }
+    function addNewRow() { currentRows.push({id:Date.now(), cat:"", price:""}); renderCalcRows(); }
     function renderCalcRows() {
-        document.getElementById("calcInputList").innerHTML = currentRows.map(r => {
+        const list = document.getElementById("inputRowList");
+        list.innerHTML = currentRows.map(r => {
             const isPre = ["guard","lining","tailor","other"].includes(r.cat);
-            return `<div class="box" style="background:#f9f9f9; padding:12px;">
-                <select onchange="const row=currentRows.find(x=>x.id==${r.id}); row.cat=this.value; row.price=''; row.preId=''; renderCalcRows(); runCalc();">
-                    ${Object.keys(CAT_LABELS).map(k=>`<option value="${k}" ${r.cat===k?'selected':''}>${CAT_LABELS[k]}</option>`).join('')}
+            return `<div class="box" style="background:#f9f9f9; padding:12px; border-style:dashed;">
+                <select onchange="const row=currentRows.find(x=>x.id==${r.id}); row.cat=this.value; row.price=''; row.preId=''; renderCalcRows(); calcLogic();">
+                    <option value="">-- カテゴリー選択 --</option>
+                    ${data.customCats.map(c=>`<option value="${c.id}" ${r.cat===c.id?'selected':''}>${c.name}</option>`).join('')}
+                    <option value="guard" ${r.cat==='guard'?'selected':''}>ガード</option>
+                    <option value="lining" ${r.cat==='lining'?'selected':''}>裏物</option>
+                    <option value="tailor" ${r.cat==='tailor'?'selected':''}>仕立</option>
+                    <option value="other" ${r.cat==='other'?'selected':''}>その他</option>
                 </select>
-                ${isPre ? `<select onchange="const pt=appData.preset['${r.cat}'].find(x=>x.id==this.value); if(pt){ const row=currentRows.find(x=>x.id==${r.id}); row.price=pt.price; row.preId=pt.id; runCalc(); }"><option value="">-- 商品選択 --</option>${appData.preset[r.cat].map(o=>`<option value="${o.id}" ${r.preId==o.id?'selected':''}>${o.name}(¥${o.price})</option>`).join('')}</select>` 
-                : `<input type="number" placeholder="金額" value="${r.price}" oninput="currentRows.find(x=>x.id==${r.id}).price=this.value; runCalc();">`}
-                <button class="btn-del" onclick="currentRows=currentRows.filter(x=>x.id!=${r.id}); renderCalcRows(); runCalc();">削除</button></div>`;
+                ${isPre ? `<select onchange="const pt=data.preset['${r.cat}'].find(x=>x.id==this.value); if(pt){ const row=currentRows.find(x=>x.id==${r.id}); row.price=pt.price; row.preId=pt.id; calcLogic(); }"><option value="">-- 商品選択 --</option>${data.preset[r.cat].map(o=>`<option value="${o.id}" ${r.preId==o.id?'selected':''}>${o.name}(¥${o.price})</option>`).join('')}</select>` 
+                : `<input type="number" placeholder="金額を入力" value="${r.price}" oninput="currentRows.find(x=>x.id==${r.id}).price=this.value; calcLogic();">`}
+                <button class="btn-del" onclick="currentRows=currentRows.filter(x=>x.id!=${r.id}); renderCalcRows(); calcLogic();">削除</button></div>`;
         }).join('');
     }
 
-    function runCalc() {
-        if(!currentRows.length || currentRows.every(r => !r.price)) { document.getElementById("calcOutput").classList.add("hidden"); return; }
+    function calcLogic() {
+        if(!currentRows.length || currentRows.every(r => !r.price)) { document.getElementById("calcOutputView").classList.add("hidden"); return; }
         const type = document.getElementById("custType").value;
         let tBef = 0, tDisc = 0, tAft = 0, lines = [];
 
         currentRows.forEach(r => {
             const price = parseFloat(r.price)||0;
-            const rate = BASE_CATS.includes(r.cat) ? (appData.catDisc[r.cat]?.[type]||0) : (appData.prodDisc?.[`${r.cat}_${r.preId}`]?.[type]||0);
+            const catName = data.customCats.find(c=>c.id===r.cat)?.name || r.cat;
+            const rate = data.catDisc[r.cat] ? (data.catDisc[r.cat][type]||0) : (data.prodDisc[`${r.cat}_${r.preId}`]?.[type]||0);
             const disc = price * (rate/100);
             tBef += price; tDisc += disc; tAft += (price - disc);
-            lines.push(`<div class="receipt-row"><span>${CAT_LABELS[r.cat]}</span><span>¥${Math.round(price).toLocaleString()}</span></div>
-                        <div class="receipt-row" style="color:var(--color-error); font-size:11px; margin-bottom:5px;"><span>└ 値引き(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
+            lines.push(`<div class="receipt-row"><span>${catName}</span><span>¥${Math.round(price).toLocaleString()}</span></div>
+                        <div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 値引き(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
         });
 
         const target = Math.round(tAft);
         let receiptHtml = `<div class="receipt-title">商品お買上明細</div>${lines.join('')}<div class="receipt-hr"></div>
             <div class="receipt-row"><span>値引前合計額</span><span>¥${Math.round(tBef).toLocaleString()}</span></div>
-            <div class="receipt-row"><span>値引合計額</span><span>-¥${Math.round(tDisc).toLocaleString()}</span></div>
+            <div class="receipt-row"><span>合計値引額</span><span>-¥${Math.round(tDisc).toLocaleString()}</span></div>
             <div class="receipt-row receipt-total"><span>お支払対象額</span><span>¥${target.toLocaleString()}</span></div>`;
 
         let cardHtml = "";
-        appData.cards.forEach(c => {
+        data.cards.forEach(c => {
             const p = parseInt(document.getElementById(`p_${c.id}`).value);
             const s = parseInt(document.getElementById(`s_${c.id}`).value);
             const rate = (parseFloat(c.pay[p])||0) + (parseFloat(c.skip?.[s])||0);
             const fee = Math.floor(target * (rate/100)); const fin = target + fee;
-            cardHtml += `<div class="card-res"><b>${c.name} (${p}回払い)</b>
-                <div class="receipt-row"><span>手数料(${rate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div>
-                <div class="receipt-row"><span>お支払総額</span><span style="font-weight:bold; color:var(--color-primary);">¥${fin.toLocaleString()}</span></div>
-                <div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々支払額</span><span style="font-size:17px; font-weight:bold;">¥${Math.floor(fin/p).toLocaleString()}</span></div></div>`;
+            cardHtml += `<div class="card-res-box"><b>${c.name} (${p}回払い)</b>
+                <div class="receipt-row"><span>分割手数料(${rate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div>
+                <div class="receipt-row"><span>お支払総額</span><span style="font-weight:bold; color:var(--p);">¥${fin.toLocaleString()}</span></div>
+                <div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払額</span><span style="font-size:17px; font-weight:bold;">¥${Math.floor(fin/p).toLocaleString()}</span></div></div>`;
         });
 
         document.getElementById("receiptUI").innerHTML = receiptHtml;
-        document.getElementById("cardResultList").innerHTML = cardHtml;
-        document.getElementById("calcOutput").classList.remove("hidden");
+        document.getElementById("cardResultsUI").innerHTML = cardHtml;
+        document.getElementById("calcOutputView").classList.remove("hidden");
     }
 
-    // --- 履歴 (20件) ---
+    // --- 履歴 (最新20件) ---
     async function saveToHistory() {
-        const detail = document.getElementById("calcOutput").innerHTML;
-        appData.history.unshift({date:Date.now(), html:detail});
-        if(appData.history.length > 20) appData.history.pop();
-        await saveRemote(); renderHistory(); alert("履歴に保存しました（最新20件）");
+        const html = document.getElementById("calcOutputView").innerHTML;
+        data.history.unshift({date:Date.now(), html:html});
+        if(data.history.length > 20) data.history.pop();
+        await pushData(); renderHistory(); alert("履歴に保存しました");
     }
     function renderHistory() {
-        document.getElementById("historyContainer").innerHTML = appData.history.length ? appData.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999;">${new Date(h.date).toLocaleString()}</p>${h.html}<button class="btn-del" onclick="if(confirm('削除しますか？')){appData.history.splice(${i},1); saveRemote(); renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
+        document.getElementById("historyListArea").innerHTML = data.history.length ? data.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999;">${new Date(h.date).toLocaleString()}</p>${h.html}<button class="btn-del" onclick="if(confirm('削除しますか？')){data.history.splice(${i},1);pushData();renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴はありません</p>';
     }
 
-    // --- リスト管理の再構築 ---
+    // --- リスト管理のレンダリング ---
     function renderPresetManager() {
-        // カード名 & 削除
-        document.getElementById("cardNamesSetting").innerHTML = appData.cards.map((c,i)=>`<div class="flex-row"><input value="${c.name}" oninput="appData.cards[${i}].name=this.value;saveRemote();refreshAllUI();"><button class="btn-del" onclick="if(confirm('カードごと削除しますか？')){appData.cards.splice(${i},1);saveRemote();renderPresetManager();}">削除</button></div>`).join('');
+        // カード管理
+        document.getElementById("manageCardNames").innerHTML = data.cards.map((c,i)=>`<div class="flex-center"><input value="${c.name}" oninput="data.cards[${i}].name=this.value;pushData();refreshUI();"><button class="btn-del" onclick="if(confirm('削除？')){data.cards.splice(${i},1);pushData();renderPresetManager();}">削除</button></div>`).join('');
         
-        // 手数料(回数)管理
-        document.getElementById("cardFeesSetting").innerHTML = appData.cards.map((c,idx) => `
+        document.getElementById("manageCardFees").innerHTML = data.cards.map((c,idx) => `
             <div class="box"><b>${c.name}</b>
-                ${Object.keys(c.pay).sort((a,b)=>a-b).map(k => `<div class="receipt-row" style="margin-bottom:8px;"><span>${k}回払い(%)</span><div class="flex-row" style="margin:0;"><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.pay[k]}" oninput="appData.cards[${idx}].pay[${k}]=this.value;saveRemote();"><button class="btn-del" onclick="delete appData.cards[${idx}].pay[${k}];saveRemote();renderPresetManager();">×</button></div></div>`).join('')}
-                <button class="btn-mini-add" onclick="const v=prompt('何回払い？'); if(v){appData.cards[${idx}].pay[v]=0;saveRemote();renderPresetManager();}">+ 回数を追加</button>
+                ${Object.keys(c.pay).sort((a,b)=>a-b).map(k => `<div class="receipt-row"><span>${k}回払い(%)</span><div class="flex-center" style="margin:0;"><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.pay[k]}" oninput="data.cards[${idx}].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete data.cards[${idx}].pay[${k}];pushData();renderPresetManager();">×</button></div></div>`).join('')}
+                <button class="btn-mini-add" onclick="const v=prompt('何回？'); if(v){data.cards[${idx}].pay[v]=0;pushData();renderPresetManager();}">+ 回数追加</button>
             </div>`).join('');
 
-        // スキップ管理
-        document.getElementById("skipFeesSetting").innerHTML = appData.cards.map((c,idx) => `
+        document.getElementById("manageSkipFees").innerHTML = data.cards.map((c,idx) => `
             <div class="box"><b>${c.name}</b>
-                ${Object.keys(c.skip||{}).sort((a,b)=>a-b).map(k => `<div class="receipt-row" style="margin-bottom:8px;"><span>${k}ヶ月スキップ(%)</span><div class="flex-row" style="margin:0;"><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.skip[idx]||c.skip[k]}" oninput="appData.cards[${idx}].skip[${k}]=this.value;saveRemote();"><button class="btn-del" onclick="delete appData.cards[${idx}].skip[${k}];saveRemote();renderPresetManager();">×</button></div></div>`).join('')}
-                <button class="btn-mini-add" onclick="const v=prompt('何ヶ月スキップ？'); if(v){if(!appData.cards[idx].skip)appData.cards[idx].skip={}; appData.cards[idx].skip[v]=0;saveRemote();renderPresetManager();}">+ スキップを追加</button>
+                ${Object.keys(c.skip||{}).sort((a,b)=>a-b).map(k => `<div class="receipt-row"><span>${k}ヶ月スキップ(%)</span><div class="flex-center" style="margin:0;"><input type="number" step="0.1" style="width:70px; margin:0;" value="${c.skip[k]}" oninput="data.cards[${idx}].skip[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete data.cards[${idx}].skip[${k}];pushData();renderPresetManager();">×</button></div></div>`).join('')}
+                <button class="btn-mini-add" onclick="const v=prompt('何ヶ月？'); if(v){if(!data.cards[idx].skip)data.cards[idx].skip={}; data.cards[idx].skip[v]=0;pushData();renderPresetManager();}">+ スキップ追加</button>
             </div>`).join('');
 
-        // カテゴリー割引
-        document.getElementById("setCatDiscount").innerHTML = BASE_CATS.map(c=>`<div class="box"><label>${CAT_LABELS[c]}</label><div class="grid-3"><div><div style="font-size:9px;">修科</div><input type="number" value="${appData.catDisc[c].student}" oninput="appData.catDisc['${c}'].student=this.value;saveRemote();"></div><div><div style="font-size:9px;">しゅう</div><input type="number" value="${appData.catDisc[c].member}" oninput="appData.catDisc['${c}'].member=this.value;saveRemote();"></div><div><div style="font-size:9px;">講師</div><input type="number" value="${appData.catDisc[c].instructor}" oninput="appData.catDisc['${c}'].instructor=this.value;saveRemote();"></div></div></div>`).join('');
-
-        // プリセット(ガード等)
+        // ガード等個別設定
         ["guard","lining","tailor","other"].forEach(cat => {
-            document.getElementById("set" + cat.charAt(0).toUpperCase() + cat.slice(1)).innerHTML = (appData.preset[cat]||[]).map((p,i)=>{
-                const d = (appData.prodDisc && appData.prodDisc[`${cat}_${p.id}`]) || {student:0, member:0, instructor:0};
-                return `<div class="box"><label>名称</label><input value="${p.name}" oninput="appData.preset['${cat}'][${i}].name=this.value;saveRemote();"><label>価格</label><input type="number" value="${p.price}" oninput="appData.preset['${cat}'][${i}].price=this.value;saveRemote();">
-                <div style="font-size:9px; margin-bottom:4px;">個別割引率(修/会/講):</div><div class="grid-3">
-                <input type="number" value="${d.student}" oninput="updProdDisc('${cat}',${p.id},'student',this.value)"><input type="number" value="${d.member}" oninput="updProdDisc('${cat}',${p.id},'member',this.value)"><input type="number" value="${d.instructor}" oninput="updProdDisc('${cat}',${p.id},'instructor',this.value)"></div>
-                <button class="btn-del" onclick="appData.preset['${cat}'].splice(${i},1);saveRemote();renderPresetManager();">削除</button></div>`;
+            document.getElementById("manage" + cat.charAt(0).toUpperCase() + cat.slice(1)).innerHTML = (data.preset[cat]||[]).map((p,i)=>{
+                const disc = data.prodDisc[`${cat}_${p.id}`] || {student:0, member:0, instructor:0};
+                return `<div class="box"><label>名称</label><input value="${p.name}" oninput="data.preset['${cat}'][${i}].name=this.value;pushData();"><label>価格</label><input type="number" value="${p.price}" oninput="data.preset['${cat}'][${i}].price=this.value;pushData();">
+                <div class="grid-3"><input type="number" value="${disc.student}" oninput="updProdDisc('${cat}',${p.id},'student',this.value)"><input type="number" value="${disc.member}" oninput="updProdDisc('${cat}',${p.id},'member',this.value)"><input type="number" value="${disc.instructor}" oninput="updProdDisc('${cat}',${p.id},'instructor',this.value)"></div>
+                <button class="btn-del" onclick="data.preset['${cat}'].splice(${i},1);pushData();renderPresetManager();">削除</button></div>`;
             }).join('');
         });
+
+        // カテゴリー追加削除
+        document.getElementById("manageCategories").innerHTML = data.customCats.map((c,i)=>`
+            <div class="box"><div class="flex-center"><input value="${c.name}" oninput="data.customCats[${i}].name=this.value;pushData();renderCalcRows();"><button class="btn-del" onclick="if(confirm('削除？')){data.customCats.splice(${i},1);pushData();renderPresetManager();}">削除</button></div>
+            <div class="grid-3"><div><div style="font-size:9px;">修科</div><input type="number" value="${data.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><div style="font-size:9px;">しゅう</div><input type="number" value="${data.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><div style="font-size:9px;">講師</div><input type="number" value="${data.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('');
     }
 
-    function updProdDisc(c,id,t,v) { if(!appData.prodDisc)appData.prodDisc={}; const k=`${c}_${id}`; if(!appData.prodDisc[k])appData.prodDisc[k]={student:0,member:0,instructor:0}; appData.prodDisc[k][t]=parseFloat(v); saveRemote(); }
-    function addCardType() { appData.cards.push({id:"c"+Date.now(), name:"新規", pay:{12:0}, skip:{0:0}}); saveRemote(); renderPresetManager(); refreshAllUI(); }
-    function addPresetItem(cat) { if(!appData.preset[cat])appData.preset[cat]=[]; appData.preset[cat].push({id:Date.now(), name:"新規", price:0}); saveRemote(); renderPresetManager(); }
+    function updCatDisc(id,t,v) { if(!data.catDisc[id]) data.catDisc[id]={}; data.catDisc[id][t]=parseFloat(v); pushData(); }
+    function updProdDisc(c,id,t,v) { const k=`${c}_${id}`; if(!data.prodDisc[k]) data.prodDisc[k]={}; data.prodDisc[k][t]=parseFloat(v); pushData(); }
+    function addCardType() { data.cards.push({id:"c"+Date.now(), name:"新規カード", pay:{12:0}, skip:{0:0}}); pushData(); renderPresetManager(); refreshUI(); }
+    function addPresetItem(cat) { data.preset[cat].push({id:Date.now(), name:"新規商品", price:0}); pushData(); renderPresetManager(); }
+    function addCustomCategory() { const id="cat"+Date.now(); data.customCats.push({id:id, name:"新規カテゴリー"}); data.catDisc[id]={student:0,member:0,instructor:0}; pushData(); renderPresetManager(); }
 
-    function switchPage(name) {
+    function showPage(name) {
         document.querySelectorAll(".page-content").forEach(p=>p.classList.add("hidden"));
         document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
         document.getElementById("page-" + name).classList.remove("hidden");
@@ -302,12 +312,16 @@
         if(name==="history") renderHistory();
     }
 
-    function refreshAllUI() {
-        document.getElementById("cardQuickSettingArea").innerHTML = appData.cards.map(c => `<section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;"><div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="runCalc()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div><div style="flex:1;"><label>スキップ</label><select id="s_${c.id}" onchange="runCalc()"><option value="0">なし</option>${Object.keys(c.skip||{}).sort((a,b)=>a-b).map(k=>k!=0?`<option value="${k}">${k}ヶ月</option>`:'').join('')}</select></div></div></section>`).join('');
+    function refreshUI() {
+        document.getElementById("cardQuickSelectArea").innerHTML = data.cards.map(c => `
+            <section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="calcLogic()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div>
+            <div style="flex:1;"><label>スキップ</label><select id="s_${c.id}" onchange="calcLogic()"><option value="0">なし</option>${Object.keys(c.skip||{}).sort((a,b)=>a-b).map(k=>k!=0?`<option value="${k}">${k}ヶ月</option>`:'').join('')}</select></div>
+            </div></section>`).join('');
     }
 
-    const savedK = localStorage.getItem("v6_app_key");
-    if(savedK) { document.getElementById("secretKey").value = savedK; launchApp(); }
+    const savedK = localStorage.getItem("v7_app_key");
+    if(savedK) { document.getElementById("secretInput").value = savedK; initApp(); }
 </script>
 </body>
 </html>
