@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro v12</title>
+    <title>分割手数料計算 Pro v13</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 
@@ -36,11 +36,13 @@
         .tab-btn { background: none; border: none; padding: 12px; color: #666; font-size: 14px; flex: 1; border-bottom: 3px solid transparent; white-space: nowrap; }
         .tab-btn.active { color: var(--p); border-bottom-color: var(--p); font-weight: bold; }
 
-        .receipt { background: #fff; border: 1px dashed #bbb; padding: 20px; font-family: monospace; font-size: 13px; color: #333; }
-        .receipt-title { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; }
-        .receipt-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .receipt-hr { border-top: 1px dashed #ccc; margin: 10px 0; }
-        .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 15px; border-radius: 8px; margin-top: 12px; }
+        /* レシート風表示 */
+        .receipt { background: #fff; border: 1px dashed #bbb; padding: 15px; font-family: monospace; font-size: 12px; color: #333; line-height: 1.4; }
+        .receipt-title { text-align: center; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px; }
+        .receipt-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .receipt-hr { border-top: 1px dashed #ccc; margin: 8px 0; }
+        .receipt-total { font-size: 15px; font-weight: bold; margin-top: 5px; }
+        .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 12px; }
 
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .grid-3 input { text-align: center; padding: 8px; font-size: 13px; }
@@ -89,8 +91,10 @@
             <div id="calcResultsView" class="hidden">
                 <section>
                     <h2>計算結果明細</h2>
-                    <div id="receiptUI" class="receipt"></div>
-                    <div id="cardResultsUI"></div>
+                    <div id="fullReceiptArea">
+                        <div id="receiptUI" class="receipt"></div>
+                        <div id="cardResultsUI"></div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -106,7 +110,7 @@
                 <button class="menu-btn" onclick="openPresetDetail('tailor')">仕立管理</button>
                 <button class="menu-btn" onclick="openPresetDetail('other')">その他管理</button>
                 <button class="menu-btn" onclick="openPresetDetail('category')">カテゴリー割引設定</button>
-                <button onclick="if(confirm('リセットします？')){localStorage.clear();location.reload();}" style="background:none; color:red; border:1px solid red; margin-top:20px;">合言葉をリセット</button>
+                <button onclick="if(confirm('リセットしますか？')){localStorage.clear();location.reload();}" style="background:none; color:red; border:1px solid red; margin-top:20px;">合言葉をリセット</button>
             </div>
             <div id="presetDetail" class="hidden">
                 <button class="btn-back" onclick="closePresetDetail()">← メニューへ戻る</button>
@@ -117,7 +121,6 @@
 </div>
 
 <script>
-    // --- Firebase構成 ---
     const fbConfig = {
         apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
         authDomain: "my-app-eb01f.firebaseapp.com",
@@ -133,11 +136,10 @@
     let data = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], skips:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let inputs = [];
 
-    // --- 起動 & 同期 ---
     async function launchApp() {
         const k = document.getElementById("secretInput").value.trim();
         if(!k) return alert("合言葉を入力してください");
-        appKey = k; localStorage.setItem("v12_app_key", appKey);
+        appKey = k; localStorage.setItem("v13_app_key", appKey);
         await syncData();
     }
 
@@ -146,8 +148,7 @@
         const doc = await db.collection("shared_users").doc(appKey).get();
         if(doc.exists) {
             data = doc.data();
-            // 不要な「新カテゴリー」の除去
-            if(data.customCats) data.customCats = data.customCats.filter(c => c.name !== "新カテゴリー" && c.name !== "新規カテゴリー");
+            if(data.customCats) data.customCats = data.customCats.filter(c => !c.name.includes("カテゴリー"));
         } else {
             // マスター初期データ
             data.cards = [{ id:"j", name:"ジャックス", pay:{12:1.2, 24:8.4} }];
@@ -158,14 +159,13 @@
         }
         document.getElementById("setupScreen").classList.add("hidden");
         document.getElementById("mainView").classList.remove("hidden");
-        document.getElementById("syncIndicator").innerText = "クラウド同期済み: " + appKey;
+        document.getElementById("syncIndicator").innerText = "同期済み: " + appKey;
         refreshCalcUI();
         if(!inputs.length) addInputRow();
     }
 
     async function pushData() { if(appKey) await db.collection("shared_users").doc(appKey).set(data); }
 
-    // --- 計算ページロジック ---
     function addInputRow() { inputs.push({id:Date.now(), cat:"", price:""}); renderInputRows(); }
     function renderInputRows() {
         document.getElementById("inputRowContainer").innerHTML = inputs.map(r => {
@@ -188,21 +188,25 @@
     function runCalculation() {
         if(!inputs.length || inputs.every(r => !r.price)) { document.getElementById("calcResultsView").classList.add("hidden"); return; }
         const type = document.getElementById("custType").value;
+        const typeLabel = type==='student'?'修科生':type==='member'?'しゅう美会生':'講師';
         let tB = 0, tD = 0, tA = 0, lines = [];
+
         inputs.forEach(r => {
             const price = parseFloat(r.price)||0;
-            const catName = data.customCats.find(c=>c.id===r.cat)?.name || r.cat;
+            const catItem = data.customCats.find(c=>c.id===r.cat);
+            const catName = catItem ? catItem.name : (r.cat==='guard'?'ガード':r.cat==='lining'?'裏物':r.cat==='tailor'?'仕立':r.cat==='other'?'その他':r.cat);
             const rate = data.catDisc[r.cat] ? (data.catDisc[r.cat][type]||0) : (data.prodDisc[`${r.cat}_${r.preId}`]?.[type]||0);
             const disc = price * (rate/100);
             tB += price; tD += disc; tA += (price - disc);
             lines.push(`<div class="receipt-row"><span>${catName}</span><span>¥${Math.round(price).toLocaleString()}</span></div>
-                        <div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 値引(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
+                        <div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 割引(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
         });
+
         const target = Math.round(tA);
-        let receiptHtml = `<div class="receipt-title">商品お買上明細</div>${lines.join('')}<div class="receipt-hr"></div>
-            <div class="receipt-row"><span>小計(値引前)</span><span>¥${Math.round(tB).toLocaleString()}</span></div>
-            <div class="receipt-row"><span>値引合計額</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>
-            <div class="receipt-row" style="font-weight:bold; font-size:16px;"><span>お支払対象額</span><span>¥${target.toLocaleString()}</span></div>`;
+        let receiptHtml = `<div class="receipt-title">御計算明細書 (${typeLabel})</div>${lines.join('')}<div class="receipt-hr"></div>
+            <div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div>
+            <div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>
+            <div class="receipt-row receipt-total"><span>お支払対象額</span><span>¥${target.toLocaleString()}</span></div>`;
         
         let cardHtml = "";
         data.cards.forEach(c => {
@@ -210,21 +214,39 @@
             const sId = document.getElementById(`s_${c.id}`).value;
             const skipObj = data.skips.find(s=>s.id===sId);
             const baseRate = parseFloat(c.pay[p])||0;
-            const skipRate = parseFloat(skipObj?.rate)||0; // 回数に関わらず一律
+            const skipRate = parseFloat(skipObj?.rate)||0;
             const totalRate = baseRate + skipRate;
             const fee = Math.floor(target * (totalRate/100)); const fin = target + fee;
             cardHtml += `<div class="card-res-box"><b>${c.name} (${p}回)</b>
-                <div class="receipt-row"><span>手数料合計(${totalRate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div>
-                <div class="receipt-row" style="font-size:11px; color:#666;"><span>(基本:${baseRate}% + スキップ:${skipRate}%)</span></div>
-                <div class="receipt-row"><span>支払総額</span><span style="font-weight:bold;">¥${fin.toLocaleString()}</span></div>
-                <div class="receipt-row" style="border-top:1px solid #ddd; margin-top:5px; padding-top:5px;"><span>月々のお支払</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${Math.floor(fin/p).toLocaleString()}</span></div></div>`;
+                <div class="receipt-row"><span>分割手数料(${totalRate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div>
+                <div class="receipt-row" style="font-size:10px; color:#666;"><span>(基本:${baseRate}% + スキップ:${skipRate}%)</span></div>
+                <div class="receipt-row receipt-total"><span>最終合計額</span><span>¥${fin.toLocaleString()}</span></div>
+                <div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${Math.floor(fin/p).toLocaleString()}</span></div></div>`;
         });
-        document.getElementById("receiptArea").innerHTML = receiptHtml;
+
+        document.getElementById("receiptUI").innerHTML = receiptHtml;
         document.getElementById("cardResultsUI").innerHTML = cardHtml;
         document.getElementById("calcResultsView").classList.remove("hidden");
     }
 
-    // --- 管理画面詳細 ---
+    async function saveToHistory() {
+        if(document.getElementById("calcResultsView").classList.contains("hidden")) return alert("計算を行ってください");
+        // 明細部分をまるごとHTMLとして保存
+        const contentHtml = document.getElementById("fullReceiptArea").innerHTML;
+        data.history.unshift({date:Date.now(), html:contentHtml});
+        if(data.history.length > 20) data.history.pop();
+        await pushData(); renderHistory(); alert("詳細明細を履歴に保存しました");
+    }
+
+    function renderHistory() {
+        document.getElementById("historyDisplayArea").innerHTML = data.history.length ? data.history.map((h, i) => `
+            <div class="box">
+                <p style="font-size:10px; color:#999; margin-bottom:8px;">保存日時: ${new Date(h.date).toLocaleString()}</p>
+                <div class="saved-receipt-wrapper">${h.html}</div>
+                <button class="btn-del" onclick="if(confirm('削除？')){data.history.splice(${i},1);pushData();renderHistory();}">削除</button>
+            </div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴はありません</p>';
+    }
+
     function openPresetDetail(type) {
         document.getElementById("presetMenu").classList.add("hidden");
         document.getElementById("presetDetail").classList.remove("hidden");
@@ -239,28 +261,27 @@
         const container = document.getElementById("presetDetailContent");
         let h = "";
         if(type === 'card') {
-            h += `<h2>カード基本設定</h2>` + data.cards.map((c,i)=>`<div class="box flex-between"><input value="${c.name}" oninput="data.cards[${i}].name=this.value;pushData();refreshCalcUI();"><button class="btn-del" onclick="data.cards.splice(${i},1);pushData();renderDetailContent('card');">削除</button></div>`).join('') + `<button class="btn-mini-add" onclick="data.cards.push({id:Date.now(),name:'新規カード',pay:{12:0}});pushData();renderDetailContent('card');">+ カード追加</button>`;
-            h += `<hr style="margin:20px 0;"><h2>支払い回数・基本手数料(%)</h2>` + data.cards.map((c,idx)=>`
+            h += `<h2>カード基本設定</h2>` + data.cards.map((c,i)=>`<div class="box flex-between"><input value="${c.name}" oninput="data.cards[${i}].name=this.value;pushData();refreshCalcUI();"><button class="btn-del" onclick="data.cards.splice(${i},1);pushData();renderDetailContent('card');">削除</button></div>`).join('') + `<button class="btn-mini-add" onclick="data.cards.push({id:Date.now(),name:'新規',pay:{12:0}});pushData();renderDetailContent('card');">+ カード追加</button>`;
+            h += `<hr style="margin:20px 0;"><h2>支払い回数・手数料(%)</h2>` + data.cards.map((c,idx)=>`
                 <div class="box"><b>${c.name}</b>
                 ${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="data.cards[${idx}].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete data.cards[${idx}].pay[${k}];pushData();renderDetailContent('card');">×</button></div></div>`).join('')}
                 <button class="btn-mini-add" onclick="const v=prompt('何回？'); if(v){data.cards[idx].pay[v]=0;pushData();renderDetailContent('card');}">+ 回数追加</button></div>`).join('');
         } else if(type === 'skip') {
-            h += `<h2>スキップ手数料設定</h2><p style="font-size:10px; color:#666; margin-bottom:10px;">回数に関係なく加算される一律の手数料を設定します。</p>`;
-            h += data.skips.map((s,i)=>`<div class="box">
-                <div class="receipt-row"><span>スキップ名</span><input value="${s.name}" style="width:120px;" oninput="data.skips[${i}].name=this.value;pushData();refreshCalcUI();"></div>
-                <div class="receipt-row"><span>加算手数料(%)</span><input type="number" step="0.1" value="${s.rate}" style="width:80px;" oninput="data.skips[${i}].rate=this.value;pushData();"></div>
+            h += `<h2>スキップ手数料設定</h2>` + data.skips.map((s,i)=>`<div class="box">
+                <div class="receipt-row"><span>名称</span><input value="${s.name}" style="width:120px;" oninput="data.skips[${i}].name=this.value;pushData();refreshCalcUI();"></div>
+                <div class="receipt-row"><span>加算(%)</span><input type="number" step="0.1" value="${s.rate}" style="width:80px;" oninput="data.skips[${i}].rate=this.value;pushData();"></div>
                 <button class="btn-del" onclick="data.skips.splice(${i},1);pushData();renderDetailContent('skip');">削除</button>
-                </div>`).join('') + `<button class="btn-mini-add" onclick="data.skips.push({id:Date.now(),name:'新スキップ',rate:0});pushData();renderDetailContent('skip');">+ スキップ項目を追加</button>`;
+                </div>`).join('') + `<button class="btn-mini-add" onclick="data.skips.push({id:Date.now(),name:'新スキップ',rate:0});pushData();renderDetailContent('skip');">+ 追加</button>`;
         } else if(['guard','lining','tailor','other'].includes(type)) {
             h += `<h2>${type}管理</h2>` + (data.preset[type]||[]).map((p,i)=>{
                 const d = (data.prodDisc && data.prodDisc[`${type}_${p.id}`]) || {student:0, member:0, instructor:0};
-                return `<div class="box"><label>商品名</label><input value="${p.name}" oninput="data.preset['${type}'][${i}].name=this.value;pushData();"><label>価格</label><input type="number" value="${p.price}" oninput="data.preset['${type}'][${i}].price=this.value;pushData();">
+                return `<div class="box"><label>名称</label><input value="${p.name}" oninput="data.preset['${type}'][${i}].name=this.value;pushData();"><label>価格</label><input type="number" value="${p.price}" oninput="data.preset['${type}'][${i}].price=this.value;pushData();">
                 <div class="grid-3"><input type="number" value="${d.student}" oninput="updProdDisc('${type}',${p.id},'student',this.value)"><input type="number" value="${d.member}" oninput="updProdDisc('${type}',${p.id},'member',this.value)"><input type="number" value="${d.instructor}" oninput="updProdDisc('${type}',${p.id},'instructor',this.value)"></div>
                 <button class="btn-del" onclick="data.preset['${type}'].splice(${i},1);pushData();renderDetailContent('${type}');">削除</button></div>`;
             }).join('') + `<button class="btn-mini-add" onclick="data.preset[type].push({id:Date.now(),name:'新規',price:0});pushData();renderDetailContent('${type}');">+ 追加</button>`;
         } else if(type === 'category') {
-            h += `<h2>カテゴリー・割引率設定</h2>` + data.customCats.map((c,i)=>`<div class="box"><div class="flex-between"><input value="${c.name}" oninput="data.customCats[${i}].name=this.value;pushData();renderInputRows();"><button class="btn-del" onclick="data.customCats.splice(${i},1);pushData();renderDetailContent('category');">削除</button></div>
-                <div class="grid-3"><div><label>修科</label><input type="number" value="${data.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${data.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${data.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `<button class="btn-mini-add" onclick="const id='c'+Date.now(); data.customCats.push({id:id,name:'新規カテゴリー'}); data.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetailContent('category');">+ カテゴリー追加</button>`;
+            h += `<h2>カテゴリー・割引設定</h2>` + data.customCats.map((c,i)=>`<div class="box"><div class="flex-between"><input value="${c.name}" oninput="data.customCats[${i}].name=this.value;pushData();renderInputRows();"><button class="btn-del" onclick="data.customCats.splice(${i},1);pushData();renderDetailContent('category');">削除</button></div>
+                <div class="grid-3"><div><label>修科</label><input type="number" value="${data.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${data.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${data.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `<button class="btn-mini-add" onclick="const id='c'+Date.now(); data.customCats.push({id:id,name:'新規'}); data.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetailContent('category');">+ 追加</button>`;
         }
         container.innerHTML = h;
     }
@@ -277,16 +298,6 @@
         if(name==="history") renderHistory();
     }
 
-    async function saveToHistory() {
-        const h = document.getElementById("calcResultsView").innerHTML;
-        data.history.unshift({date:Date.now(), html:h});
-        if(data.history.length > 20) data.history.pop();
-        await pushData(); alert("履歴に保存しました");
-    }
-    function renderHistory() {
-        document.getElementById("historyDisplayArea").innerHTML = data.history.length ? data.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999;">${new Date(h.date).toLocaleString()}</p>${h.html}<button class="btn-del" onclick="if(confirm('削除？')){data.history.splice(${i},1);pushData();renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
-    }
-
     function refreshCalcUI() {
         document.getElementById("cardQuickSettings").innerHTML = data.cards.map(c => `
             <section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;">
@@ -295,7 +306,7 @@
             </div></section>`).join('');
     }
 
-    const savedK = localStorage.getItem("v12_app_key");
+    const savedK = localStorage.getItem("v13_app_key");
     if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
 </script>
 </body>
