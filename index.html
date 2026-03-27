@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro v16</title>
+    <title>分割手数料計算 Pro v17</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -37,7 +37,7 @@
         .receipt { background: #fff; border: 1px dashed #bbb; padding: 20px; font-family: monospace; font-size: 12px; color: #333; line-height: 1.4; }
         .receipt-title { text-align: center; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px; }
         .receipt-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-        .receipt-hr { border-top: 1px dashed #ccc; margin: 8px 0; }
+        .receipt-hr { border-top: 1px dashed #ccc; margin: 10px 0; }
         .receipt-total { font-size: 15px; font-weight: bold; margin-top: 5px; color: var(--text); }
         .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 12px; border-radius: 8px; margin-top: 10px; }
 
@@ -54,7 +54,7 @@
 <div class="container">
     <div id="setupScreen" class="box" style="margin-top: 40px;">
         <h2 style="text-align:center;">データの復元と開始</h2>
-        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">合言葉を入力してください。設定と履歴が同期されます。</p>
+        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">合言葉を入力してください。</p>
         <input type="text" id="secretInput" placeholder="例: tanaka-app-2026">
         <button class="btn-add" onclick="launchApp()">復元して開始</button>
     </div>
@@ -91,7 +91,7 @@
             </section>
 
             <div id="cardQuickSettingArea"></div>
-            <button class="btn-save" onclick="saveToHistory()">計算結果を履歴に保存</button>
+            <button class="btn-save" id="saveBtn" onclick="saveToHistory()">計算結果を履歴に保存</button>
 
             <div id="calcResultView" class="hidden">
                 <section>
@@ -104,9 +104,7 @@
             </div>
         </div>
 
-        <div id="page-history" class="page-content hidden">
-            <div id="historyListArea"></div>
-        </div>
+        <div id="page-history" class="page-content hidden"><div id="historyListArea"></div></div>
 
         <div id="page-preset" class="page-content hidden">
             <div id="presetMenu">
@@ -146,7 +144,7 @@
     async function launchApp() {
         const k = document.getElementById("secretInput").value.trim();
         if(!k) return alert("合言葉を入力してください");
-        appKey = k; localStorage.setItem("v16_app_key", appKey);
+        appKey = k; localStorage.setItem("v17_app_key", appKey);
         await syncData();
     }
 
@@ -156,7 +154,7 @@
         if(doc.exists) {
             appData = doc.data();
             if(!appData.history) appData.history = [];
-            if(appData.customCats) appData.customCats = appData.customCats.filter(c => !c.name.includes("カテゴリー") && c.name !== "新規");
+            if(appData.customCats) appData.customCats = appData.customCats.filter(c => !c.name.includes("カテゴリー") && c.name !== "新規" && c.name !== "新カテゴリー");
         } else {
             appData.cards = [{ id:"j", name:"ジャックス", pay:{12:1.2, 24:8.4} }];
             appData.skips = [{ id:"s1", name:"スキップなし", rate:0 }];
@@ -173,7 +171,7 @@
 
     async function pushData() {
         if(!appKey) return;
-        document.getElementById("syncIndicator").innerText = "クラウド保存中...";
+        document.getElementById("syncIndicator").innerText = "保存中...";
         await db.collection("shared_users").doc(appKey).set(appData);
         document.getElementById("syncIndicator").innerText = "同期済み";
     }
@@ -203,19 +201,36 @@
     function runCalculation() {
         if(!cProds.length || cProds.every(r => !r.price)) { document.getElementById("calcResultView").classList.add("hidden"); return; }
         const type = document.getElementById("custType").value;
+        const typeLabel = type==='student'?'修科生':type==='member'?'しゅう美会生':'講師';
         let tB = 0, tD = 0, lines = [];
+        
         cProds.forEach(r => {
             const price = parseFloat(r.price)||0;
-            const catName = appData.customCats.find(c=>c.id===r.cat)?.name || r.cat;
+            // 日本語名の取得ロジック修正
+            let displayName = "";
+            const catObj = appData.customCats.find(c => c.id === r.cat);
+            if(catObj) {
+                displayName = catObj.name;
+            } else {
+                const labels = {guard:"ガード", lining:"裏物", tailor:"仕立", other:"その他"};
+                if(r.preId && appData.preset[r.cat]) {
+                    const subItem = appData.preset[r.cat].find(i => i.id == r.preId);
+                    displayName = subItem ? subItem.name : labels[r.cat];
+                } else {
+                    displayName = labels[r.cat] || "未設定";
+                }
+            }
+            
             const rate = appData.catDisc[r.cat] ? (appData.catDisc[r.cat][type]||0) : (appData.prodDisc[`${r.cat}_${r.preId}`]?.[type]||0);
             const disc = price * (rate/100); tB += price; tD += disc;
-            lines.push(`<div class="receipt-row"><span>${catName}</span><span>¥${Math.round(price).toLocaleString()}</span></div><div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 割引(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
+            lines.push(`<div class="receipt-row"><span>${displayName}</span><span>¥${Math.round(price).toLocaleString()}</span></div><div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 割引(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
         });
+        
         const coupons = cCoupons.reduce((s,c)=>s+(parseFloat(c.price)||0),0);
         const downs = cDowns.reduce((s,d)=>s+(parseFloat(d.price)||0),0);
         const target = Math.max(0, Math.round(tB - tD - coupons - downs));
 
-        let rHtml = `<div class="receipt-title">御計算明細書</div>${lines.join('')}<div class="receipt-hr"></div><div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div><div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>${coupons>0?`<div class="receipt-row"><span>金券控除</span><span>-¥${coupons.toLocaleString()}</span></div>`:''}${downs>0?`<div class="receipt-row"><span>頭金控除</span><span>-¥${downs.toLocaleString()}</span></div>`:''}<div class="receipt-row receipt-total"><span>お支払対象額 (元金)</span><span>¥${target.toLocaleString()}</span></div>`;
+        let rHtml = `<div class="receipt-title">御計算明細書 (${typeLabel})</div>${lines.join('')}<div class="receipt-hr"></div><div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div><div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>${coupons>0?`<div class="receipt-row"><span>金券控除</span><span>-¥${coupons.toLocaleString()}</span></div>`:''}${downs>0?`<div class="receipt-row"><span>頭金控除</span><span>-¥${downs.toLocaleString()}</span></div>`:''}<div class="receipt-row receipt-total"><span>お支払対象額 (元金)</span><span>¥${target.toLocaleString()}</span></div>`;
         let cHtml = "";
         appData.cards.forEach(c => {
             const p = parseInt(document.getElementById(`p_${c.id}`).value);
@@ -223,7 +238,7 @@
             const sRate = appData.skips.find(s=>s.id===sId)?.rate || 0;
             const totalRate = (parseFloat(c.pay[p])||0) + parseFloat(sRate);
             const fee = Math.floor(target * (totalRate/100)); const final = target + fee;
-            cHtml += `<div class="card-res-box"><b>${c.name} (${p}回)</b><div class="receipt-row"><span>手数料(${totalRate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div><div class="receipt-row receipt-total"><span>最終合計額</span><span>¥${final.toLocaleString()}</span></div><div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${Math.floor(final/p).toLocaleString()}</span></div></div>`;
+            cHtml += `<div class="card-res-box"><b>${c.name} (${p}回)</b><div class="receipt-row"><span>手数料(${totalRate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div><div class="receipt-row receipt-total"><span>最終合計額</span><span>¥${final.toLocaleString()}</span></div><div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払額</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${Math.floor(final/p).toLocaleString()}</span></div></div>`;
         });
         document.getElementById("receiptUI").innerHTML = rHtml; document.getElementById("cardUI").innerHTML = cHtml;
         document.getElementById("calcResultView").classList.remove("hidden");
@@ -231,11 +246,19 @@
 
     async function saveToHistory() {
         if(document.getElementById("calcResultView").classList.contains("hidden")) return;
+        const btn = document.getElementById("saveBtn");
+        btn.innerText = "保存中..."; btn.disabled = true;
+        
         const html = document.getElementById("fullReceiptWrapper").innerHTML;
         appData.history.unshift({date:Date.now(), html:html});
         if(appData.history.length > 20) appData.history.pop();
-        await pushData(); renderHistory(); alert("最新履歴に保存しました");
+        
+        await pushData(); 
+        renderHistory(); 
+        btn.innerText = "計算結果を履歴に保存"; btn.disabled = false;
+        alert("最新20件の履歴に詳細を保存しました");
     }
+
     function renderHistory() {
         document.getElementById("historyListArea").innerHTML = appData.history.length ? appData.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999; margin-bottom:8px;">日時: ${new Date(h.date).toLocaleString()}</p><div>${h.html}</div><button class="btn-del" onclick="if(confirm('削除？')){appData.history.splice(${i},1);pushData();renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
     }
@@ -247,15 +270,15 @@
         const container = document.getElementById("detailContent"); let h = "";
         if(type==='card') {
             h += `<h2>カード種類</h2><div id="sort-cards">` + appData.cards.map((c,i)=>`<div class="box flex-between" data-id="${i}"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.cards[${i}].name=this.value;pushData();refreshAllCalcUI();"><button class="btn-del" onclick="appData.cards.splice(${i},1);pushData();renderDetail('card');">×</button></div>`).join('') + `</div><button class="btn-mini-add" onclick="appData.cards.push({id:Date.now(),name:'新規',pay:{12:0}});pushData();renderDetail('card');">+ カード追加</button>`;
-            h += `<hr style="margin:20px 0;"><h2>回数・手数料(%)</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="appData.cards[idx].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[idx].pay[${k}];pushData();renderDetail('card');">×</button></div></div>`).join('')}<button class="btn-mini-add" onclick="const v=prompt('何回？'); if(v){appData.cards[idx].pay[v]=0;pushData();renderDetail('card');}">+ 追加</button></div>`).join('');
+            h += `<hr style="margin:20px 0;"><h2>支払い回数・手数料(%)</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="appData.cards[idx].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[idx].pay[${k}];pushData();renderDetail('card');">×</button></div></div>`).join('')}<button class="btn-mini-add" onclick="const v=prompt('何回？'); if(v){appData.cards[idx].pay[v]=0;pushData();renderDetail('card');}">+ 追加</button></div>`).join('');
         } else if(type==='skip') {
-            h += `<h2>スキップ手数料設定</h2><div id="sort-skip">` + appData.skips.map((s,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${s.name}" oninput="appData.skips[${i}].name=this.value;pushData();refreshAllCalcUI();"></div><div class="receipt-row" style="margin-top:10px;"><span>加算(%)</span><input type="number" step="0.1" value="${s.rate}" oninput="appData.skips[${i}].rate=this.value;pushData();"></div><button class="btn-del" onclick="appData.skips.splice(${i},1);pushData();renderDetail('skip');">削除</button></div>`).join('') + `</div><button class="btn-mini-add" onclick="appData.skips.push({id:Date.now(),name:'新規',rate:0});pushData();renderDetail('skip');">+ 追加</button>`;
+            h += `<h2>スキップ手数料設定</h2><div id="sort-skip">` + appData.skips.map((s,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${s.name}" oninput="appData.skips[${i}].name=this.value;pushData();refreshAllCalcUI();"></div><div class="receipt-row" style="margin-top:10px;"><span>加算手数料(%)</span><input type="number" step="0.1" value="${s.rate}" oninput="appData.skips[${i}].rate=this.value;pushData();"></div><button class="btn-del" onclick="appData.skips.splice(${i},1);pushData();renderDetail('skip');">削除</button></div>`).join('') + `</div><button class="btn-mini-add" onclick="appData.skips.push({id:Date.now(),name:'新規',rate:0});pushData();renderDetail('skip');">+ 追加</button>`;
         } else if(['guard','lining','tailor','other'].includes(type)) {
-            h += `<h2>${type}管理</h2><div id="sort-preset">` + (appData.preset[type]||[]).map((p,i)=>{
+            h += `<h2>${type==='guard'?'ガード':type==='lining'?'裏物':type==='tailor'?'仕立':'その他'}管理</h2><div id="sort-preset">` + (appData.preset[type]||[]).map((p,i)=>{
                 const d = (appData.prodDisc && appData.prodDisc[`${type}_${p.id}`]) || {student:0, member:0, instructor:0};
                 return `<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${p.name}" oninput="appData.preset['${type}'][${i}].name=this.value;pushData();"></div><label>定価</label><input type="number" value="${p.price}" oninput="appData.preset['${type}'][${i}].price=this.value;pushData();">
                 <div class="grid-3"><input type="number" value="${d.student}" oninput="updProdDisc('${type}',${p.id},'student',this.value)"><input type="number" value="${d.member}" oninput="updProdDisc('${type}',${p.id},'member',this.value)"><input type="number" value="${d.instructor}" oninput="updProdDisc('${type}',${p.id},'instructor',this.value)"></div><button class="btn-del" onclick="appData.preset['${type}'].splice(${i},1);pushData();renderDetail('${type}');">削除</button></div>`;
-            }).join('') + `</div><button class="btn-mini-add" onclick="if(!appData.preset['${type}'])appData.preset['${type}']=[]; appData.preset['${type}'].push({id:Date.now(),name:'新規',price:0});pushData();renderDetail('${type}');">+ 追加</button>`;
+            }).join('') + `</div><button class="btn-mini-add" onclick="if(!appData.preset['${type}'])appData.preset['${type}']=[]; appData.preset['${type}'].push({id:Date.now(),name:'新規商品',price:0});pushData();renderDetail('${type}');">+ 追加</button>`;
         } else if(type==='category') {
             h += `<h2>カテゴリー・割引率設定</h2><div id="sort-cat">` + (appData.customCats||[]).map((c,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.customCats[${i}].name=this.value;pushData();renderProductRows();"><button class="btn-del" onclick="appData.customCats.splice(${i},1);pushData();renderDetail('category');">×</button></div>
                 <div class="grid-3"><div><label>修科</label><input type="number" value="${appData.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${appData.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${appData.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `</div><button class="btn-mini-add" onclick="const id='c'+Date.now(); appData.customCats.push({id:id,name:'新規'}); appData.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetail('category');">+ 追加</button>`;
@@ -284,7 +307,7 @@
         document.getElementById("cardQuickSettingArea").innerHTML = (appData.cards||[]).map(c => `<section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;"><div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="runCalculation()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div><div style="flex:1;"><label>スキップ</label><select id="s_${c.id}" onchange="runCalculation()">${appData.skips.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div></div></section>`).join('');
     }
 
-    const savedK = localStorage.getItem("v16_app_key");
+    const savedK = localStorage.getItem("v17_app_key");
     if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
 </script>
 </body>
