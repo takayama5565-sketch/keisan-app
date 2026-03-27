@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro v14</title>
+    <title>分割手数料計算 Pro v15</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -27,29 +27,26 @@
         .btn-add { background: var(--p); color: white; margin-bottom: 12px; }
         .btn-save { background: #208d8d; color: white; margin: 20px 0; }
         .btn-del { background: #fff5f5; color: var(--err); border: 1px solid var(--err); padding: 6px 12px; font-size: 11px; width: auto; margin-top: 5px; border-radius: 4px; }
+        .btn-back { background: #f0f0f0; color: #666; margin-top: 10px; }
         .btn-mini-add { background: #e0f2f1; color: var(--p); border: 1px solid var(--p); padding: 8px; font-size: 12px; width: auto; border-radius: 4px; margin-bottom: 15px; }
 
         .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
         .tab-btn { background: none; border: none; padding: 12px; color: #666; font-size: 14px; flex: 1; border-bottom: 3px solid transparent; white-space: nowrap; }
         .tab-btn.active { color: var(--p); border-bottom-color: var(--p); font-weight: bold; }
 
-        /* レシート表示 */
         .receipt { background: #fff; border: 1px dashed #bbb; padding: 20px; font-family: monospace; font-size: 12px; color: #333; line-height: 1.4; }
         .receipt-title { text-align: center; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px; }
         .receipt-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-        .receipt-hr { border-top: 1px dashed #ccc; margin: 8px 0; }
+        .receipt-hr { border-top: 1px dashed #ccc; margin: 10px 0; }
         .receipt-total { font-size: 15px; font-weight: bold; margin-top: 5px; color: var(--text); }
         .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 12px; border-radius: 8px; margin-top: 10px; }
 
-        /* 管理用 */
         .menu-btn { background: white; border: 1px solid var(--border); color: var(--text); text-align: left; padding: 18px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px; }
         .menu-btn::after { content: "›"; font-size: 24px; color: var(--p); }
         .sortable-handle { cursor: grab; padding: 10px; color: #ccc; font-size: 20px; }
-        .sortable-ghost { opacity: 0.4; background: #e0f7fa !important; }
-
+        .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         .grid-3 input { text-align: center; padding: 8px; font-size: 13px; }
-        .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     </style>
 </head>
 <body>
@@ -57,7 +54,7 @@
 <div class="container">
     <div id="setupScreen" class="box" style="margin-top: 40px;">
         <h2 style="text-align:center;">データの復元と開始</h2>
-        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">合言葉を入力してください。設定と履歴が同期されます。</p>
+        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">合言葉を入力してください。以前の設定と履歴が読み込まれます。</p>
         <input type="text" id="secretInput" placeholder="例: tanaka-app-2026">
         <button class="btn-add" onclick="launchApp()">復元して開始</button>
     </div>
@@ -162,7 +159,7 @@
     async function launchApp() {
         const k = document.getElementById("secretInput").value.trim();
         if(!k) return alert("合言葉を入力してください");
-        appKey = k; localStorage.setItem("v14_app_key", appKey);
+        appKey = k; localStorage.setItem("v15_app_key", appKey);
         await syncData();
     }
 
@@ -171,8 +168,8 @@
         const doc = await db.collection("shared_users").doc(appKey).get();
         if(doc.exists) {
             appData = doc.data();
-            // 不正カテゴリー名のクリーンアップ
-            if(appData.customCats) appData.customCats = appData.customCats.filter(c => !c.name.includes("カテゴリー"));
+            // 不正データの掃除
+            if(appData.customCats) appData.customCats = appData.customCats.filter(c => !c.name.includes("カテゴリー") && c.name !== "新規");
         } else {
             // 初期データ
             appData.cards = [{ id:"j", name:"ジャックス", pay:{12:1.2, 24:8.4} }];
@@ -256,12 +253,12 @@
             const totalRate = (parseFloat(c.pay[pCount])||0) + (parseFloat(skipObj?.rate)||0);
             const fee = Math.floor(targetAmount * (totalRate/100));
             const finalTotal = targetAmount + fee;
-            const monthly = Math.floor(finalTotal / pCount); // 小数点以下切り捨て
+            const monthly = Math.floor(finalTotal / pCount);
 
             cardHtml += `<div class="card-res-box"><b>${c.name} (${pCount}回)</b>
                 <div class="receipt-row"><span>分割手数料(${totalRate.toFixed(1)}%)</span><span>¥${fee.toLocaleString()}</span></div>
                 <div class="receipt-row receipt-total"><span>最終合計額</span><span>¥${finalTotal.toLocaleString()}</span></div>
-                <div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払 (初回〜)</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${monthly.toLocaleString()}</span></div></div>`;
+                <div class="receipt-row" style="border-top:1px solid #ccc; margin-top:5px; padding-top:5px;"><span>月々のお支払</span><span style="font-size:16px; font-weight:bold; color:var(--p);">¥${monthly.toLocaleString()}</span></div></div>`;
         });
 
         document.getElementById("receiptUI").innerHTML = receiptHtml;
@@ -274,18 +271,13 @@
         const content = document.getElementById("receiptContainer").innerHTML;
         appData.history.unshift({date:Date.now(), html:content});
         if(appData.history.length > 20) appData.history.pop();
-        await pushData(); alert("明細を履歴に保存しました(最新20件)");
+        await pushData(); alert("履歴に保存しました(最新20件)");
     }
     function renderHistory() {
-        document.getElementById("historyList").innerHTML = appData.history.length ? appData.history.map((h, i) => `
-            <div class="box">
-                <p style="font-size:10px; color:#999; margin-bottom:8px;">日時: ${new Date(h.date).toLocaleString()}</p>
-                <div>${h.html}</div>
-                <button class="btn-del" onclick="if(confirm('削除？')){appData.history.splice(${i},1);pushData();renderHistory();}">削除</button>
-            </div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
+        document.getElementById("historyList").innerHTML = appData.history.length ? appData.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999; margin-bottom:8px;">日時: ${new Date(h.date).toLocaleString()}</p><div>${h.html}</div><button class="btn-del" onclick="if(confirm('削除？')){appData.history.splice(${i},1);pushData();renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
     }
 
-    // --- リスト管理・並び替え機能 ---
+    // --- 管理画面・並び替え ---
     function openDetail(type) {
         document.getElementById("presetMenu").classList.add("hidden");
         document.getElementById("presetDetail").classList.remove("hidden");
@@ -311,8 +303,8 @@
                 <div class="grid-3"><input type="number" value="${d.student}" oninput="updProdDisc('${type}',${p.id},'student',this.value)"><input type="number" value="${d.member}" oninput="updProdDisc('${type}',${p.id},'member',this.value)"><input type="number" value="${d.instructor}" oninput="updProdDisc('${type}',${p.id},'instructor',this.value)"></div><button class="btn-del" onclick="appData.preset['${type}'].splice(${i},1);pushData();renderDetail('${type}');">削除</button></div>`;
             }).join('') + `</div><button class="btn-mini-add" onclick="if(!appData.preset['${type}'])appData.preset['${type}']=[]; appData.preset['${type}'].push({id:Date.now(),name:'新規',price:0});pushData();renderDetail('${type}');">+ 追加</button>`;
         } else if(type==='category') {
-            html += `<h2>カテゴリー・割引設定</h2><div id="sort-cat">` + appData.customCats.map((c,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.customCats[${i}].name=this.value;pushData();"><button class="btn-del" onclick="appData.customCats.splice(${i},1);pushData();renderDetail('category');">×</button></div>
-                <div class="grid-3"><div><label>修科</label><input type="number" value="${appData.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${appData.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${data.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `</div><button class="btn-mini-add" onclick="const id='c'+Date.now(); appData.customCats.push({id:id,name:'新カテゴリー'}); appData.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetail('category');">+ 追加</button>`;
+            html += `<h2>カテゴリー・割引率設定</h2><div id="sort-cat">` + (appData.customCats||[]).map((c,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.customCats[${i}].name=this.value;pushData();renderProductRows();"><button class="btn-del" onclick="appData.customCats.splice(${i},1);pushData();renderDetail('category');">×</button></div>
+                <div class="grid-3"><div><label>修科</label><input type="number" value="${appData.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${appData.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${appData.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `</div><button class="btn-mini-add" onclick="const id='c'+Date.now(); appData.customCats.push({id:id,name:'新規項目'}); appData.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetail('category');">+ 追加</button>`;
         }
         container.innerHTML = html;
         initSortable(type);
@@ -322,7 +314,7 @@
         const el = document.querySelector('[id^="sort-"]');
         if(!el) return;
         new Sortable(el, {
-            handle: '.sortable-handle', ghostClass: 'sortable-ghost',
+            handle: '.sortable-handle', animation: 150,
             onEnd: function() {
                 const newOrder = Array.from(el.children).map(child => parseInt(child.dataset.id));
                 if(type==='card') appData.cards = newOrder.map(idx => appData.cards[idx]);
@@ -347,14 +339,10 @@
     }
 
     function refreshAllCalcUI() {
-        document.getElementById("cardSettingQuick").innerHTML = (appData.cards||[]).map(c => `
-            <section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;">
-            <div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="runCalculation()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div>
-            <div style="flex:1;"><label>スキップ</label><select id="s_${c.id}" onchange="runCalculation()">${appData.skips.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div>
-            </div></section>`).join('');
+        document.getElementById("cardSettingQuick").innerHTML = (appData.cards||[]).map(c => `<section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;"><div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="runCalculation()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div><div style="flex:1;"><label>スキップ</label><select id="s_${c.id}" onchange="runCalculation()">${appData.skips.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')}</select></div></div></section>`).join('');
     }
 
-    const savedK = localStorage.getItem("v14_app_key");
+    const savedK = localStorage.getItem("v15_app_key");
     if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
 </script>
 </body>
