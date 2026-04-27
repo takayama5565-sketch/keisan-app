@@ -1,1 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>分割手数料計算 Pro 決定版</title>
+    <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
+    <style>
+        :root {
+            --p: #32b8c6; --bg: #fcfcf9; --surf: #ffffff; --text: #134252; --sub: #626c71; --border: rgba(94, 82, 64, 0.2); --err: #c0152f;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg); color: var(--text); padding: 12px; line-height: 1.5; }
+        .hidden { display: none !important; }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        section, .box { background: var(--surf); border-radius: 12px; border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        h2 { font-size: 15px; margin-bottom: 15px; color: var(--p); border-bottom: 2px solid var(--border); padding-bottom: 8px; font-weight: bold; }
+        
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 16px; margin-bottom: 10px; background: white; color: var(--text); }
+        label { display: block; font-size: 11px; font-weight: bold; color: var(--sub); margin-bottom: 4px; }
+        
+        button { width: 100%; padding: 14px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; font-size: 15px; transition: all 0.2s; }
+        .btn-add { background: var(--p); color: white; margin-bottom: 12px; }
+        .btn-save { background: #208d8d; color: white; margin: 20px 0; }
+        .btn-del { background: #fff5f5; color: var(--err); border: 1px solid var(--err); padding: 6px 12px; font-size: 11px; width: auto; margin-top: 5px; border-radius: 4px; }
+        .btn-back { background: #f0f0f0; color: #666; margin-top: 10px; }
+        .btn-mini-add { background: #e0f2f1; color: var(--p); border: 1px solid var(--p); padding: 8px; font-size: 12px; width: auto; border-radius: 4px; margin-bottom: 15px; }
+
+        .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
+        .tab-btn { background: none; border: none; padding: 12px; color: #666; font-size: 14px; flex: 1; border-bottom: 3px solid transparent; white-space: nowrap; }
+        .tab-btn.active { color: var(--p); border-bottom-color: var(--p); font-weight: bold; }
+
+        .receipt { background: #fff; border: 1px dashed #bbb; padding: 20px; font-family: monospace; font-size: 12px; color: #333; line-height: 1.4; }
+        .receipt-title { text-align: center; font-weight: bold; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px; }
+        .receipt-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .receipt-hr { border-top: 1px dashed #ccc; margin: 8px 0; }
+        .receipt-total { font-size: 15px; font-weight: bold; margin-top: 5px; color: var(--text); }
+        .card-res-box { background: #eefbfc; border-left: 5px solid var(--p); padding: 15px; border-radius: 8px; margin-top: 10px; }
+
+        .menu-btn { background: white; border: 1px solid var(--border); color: var(--text); text-align: left; padding: 18px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px; }
+        .menu-btn::after { content: "›"; font-size: 24px; color: var(--p); }
+        .sortable-handle { cursor: grab; padding: 10px; color: #ccc; font-size: 20px; }
+        .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .grid-3 input { text-align: center; padding: 8px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="mainView">
+        <header style="text-align:center; padding-bottom:15px;">
+            <h1 style="font-size:18px; color:var(--p);">分割手数料計算 Pro</h1>
+            <div id="syncIndicator" style="font-size:9px; color:#aaa; margin-top:5px;">読込中...</div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" id="tab-calc" onclick="showPage('calculator')">計算</button>
+            <button class="tab-btn" id="tab-hist" onclick="showPage('history')">履歴</button>
+            <button class="tab-btn" id="tab-set" onclick="showPage('preset')">リスト管理</button>
+        </div>
+
+        <div id="page-calculator" class="page-content">
+            <section>
+                <h2>基本情報</h2>
+                <label>顧客種別</label>
+                <select id="custType" onchange="runCalculation()">
+                    <option value="student">修科生</option>
+                    <option value="member">しゅう美会生</option>
+                    <option value="instructor">講師</option>
+                </select>
+                <div id="couponArea"><label>金券（控除額）</label><div id="couponList"></div><button class="btn-mini-add" onclick="addMoney('coupon')">+ 金券を追加</button></div>
+                <div id="downArea"><label>頭金（控除額）</label><div id="downList"></div><button class="btn-mini-add" onclick="addMoney('down')">+ 頭金を追加</button></div>
+            </section>
+            
+            <section>
+                <h2>商品情報</h2>
+                <div id="productRows"></div>
+                <button class="btn-add" onclick="addProductRow()">+ 商品を追加</button>
+            </section>
+
+            <div id="cardQuickSettingArea"></div>
+            <button class="btn-save" id="saveBtn" onclick="saveToHistory()">計算結果を履歴に保存</button>
+
+            <div id="calcResultView" class="hidden">
+                <section>
+                    <h2>計算結果明細</h2>
+                    <div id="fullReceiptWrapper">
+                        <div id="receiptUI" class="receipt"></div>
+                        <div id="cardUI"></div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div id="page-history" class="page-content hidden"><div id="historyListArea"></div></div>
+
+        <div id="page-preset" class="page-content hidden">
+            <div id="presetMenu">
+                <button class="menu-btn" onclick="openDetail('card')">カード管理</button>
+                <button class="menu-btn" onclick="openDetail('skip')">スキップ管理</button>
+                <button class="menu-btn" onclick="openDetail('guard')">ガード管理</button>
+                <button class="menu-btn" onclick="openDetail('lining')">裏物管理</button>
+                <button class="menu-btn" onclick="openDetail('tailor')">仕立管理</button>
+                <button class="menu-btn" onclick="openDetail('other')">その他管理</button>
+                <button class="menu-btn" onclick="openDetail('category')">カテゴリー割引設定</button>
+            </div>
+            <div id="presetDetail" class="hidden">
+                <button class="btn-back" onclick="closeDetail()">← メニューへ戻る</button>
+                <div id="detailContent" style="margin-top:15px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Firebase構成 ---
+    const fbConfig = {
+        apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
+        authDomain: "my-app-eb01f.firebaseapp.com",
+        projectId: "my-app-eb01f",
+        storageBucket: "my-app-eb01f.firebasestorage.app",
+        messagingSenderId: "225201328715",
+        appId: "1:225201328715:web:952f9d2d3c4653543eb3ce"
+    };
+    firebase.initializeApp(fbConfig);
+    const db = firebase.firestore();
+
+    // ★ 合言葉を裏側で固定 ★
+    let appKey = "auto_login_master_key"; 
+    let appData = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
+    let cProds = []; let cCoupons = []; let cDowns = [];
+
+    // --- 起動 & 同期 (自動実行) ---
+    window.onload = async function() {
+        await syncData();
+    };
+
+    async function syncData() {
+        document.getElementById("syncIndicator").innerText = "同期中...";
+        try {
+            const doc = await db.collection("shared_users").doc(appKey).get();
+            if(doc.exists) {
+                appData = doc.data();
+                if(!appData.history) appData.history = [];
+                if(appData.cards) {
+                    appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
+                }
+            } else {
+                appData.cards = [
+                    { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
+                    { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
+                ];
+                appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
+                appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
+                await pushData();
+            }
+            document.getElementById("syncIndicator").innerText = "接続済み";
+            refreshAllCalcUI();
+            if(!cProds.length) addProductRow();
+        } catch(e) {
+            document.getElementById("syncIndicator").innerText = "接続エラー";
+            alert("データベースに接続できません。Firebaseの有効期限やAPIキーの設定をご確認ください。");
+        }
+    }
+
+    async function pushData() {
+        document.getElementById("syncIndicator").innerText = "保存中...";
+        try {
+            await db.collection("shared_users").doc(appKey).set(appData);
+            document.getElementById("syncIndicator").innerText = "同期済み";
+        } catch(e) {
+            document.getElementById("syncIndicator").innerText = "保存エラー";
+        }
+    }
+
+    // --- 計算・入力 ---
+    function addProductRow() { cProds.push({id:Date.now(), cat:"", price:""}); renderProductRows(); }
+    function renderProductRows() {
+        document.getElementById("productRows").innerHTML = cProds.map(r => {
+            const isPre = ["guard","lining","tailor","other"].includes(r.cat);
+            return `<div class="box" style="background:#f9f9f9; padding:12px; border-style:dashed;">
+                <select onchange="const row=cProds.find(x=>x.id==${r.id}); row.cat=this.value; row.price=''; row.preId=''; renderProductRows(); runCalculation();">
+                    <option value="">-- カテゴリー --</option>
+                    ${appData.customCats.map(c=>`<option value="${c.id}" ${r.cat===c.id?'selected':''}>${c.name}</option>`).join('')}
+                    <option value="guard" ${r.cat==='guard'?'selected':''}>ガード</option><option value="lining" ${r.cat==='lining'?'selected':''}>裏物</option><option value="tailor" ${r.cat==='tailor'?'selected':''}>仕立</option><option value="other" ${r.cat==='other'?'selected':''}>その他</option>
+                </select>
+                ${isPre ? `<select onchange="const pt=appData.preset['${r.cat}'].find(x=>x.id==this.value); if(pt){ const row=cProds.find(x=>x.id==${r.id}); row.price=pt.price; row.preId=pt.id; runCalculation(); }"><option value="">-- 商品選択 --</option>${(appData.preset[r.cat]||[]).map(o=>`<option value="${o.id}" ${r.preId==o.id?'selected':''}>${o.name}(¥${o.price})</option>`).join('')}</select>` 
+                : `<input type="number" placeholder="金額を入力" value="${r.price}" oninput="cProds.find(x=>x.id==${r.id}).price=this.value; runCalculation();">`}
+                <button class="btn-del" onclick="cProds=cProds.filter(x=>x.id!=${r.id}); renderProductRows(); runCalculation();">削除</button></div>`;
+        }).join('');
+    }
+
+    function addMoney(type) { (type==='coupon'?cCoupons:cDowns).push({id:Date.now(), price:""}); renderMoney(); }
+    function renderMoney() {
+        document.getElementById("couponList").innerHTML = cCoupons.map(c=>`<div class="flex-between"><input type="number" placeholder="金券額を入力" value="${c.price}" oninput="cCoupons.find(x=>x.id==${c.id}).price=this.value; runCalculation();"><button class="btn-del" onclick="cCoupons=cCoupons.filter(x=>x.id!=${c.id}); renderMoney(); runCalculation();">×</button></div>`).join('');
+        document.getElementById("downList").innerHTML = cDowns.map(d=>`<div class="flex-between"><input type="number" placeholder="頭金額を入力" value="${d.price}" oninput="cDowns.find(x=>x.id==${d.id}).price=this.value; runCalculation();"><button class="btn-del" onclick="cDowns=cDowns.filter(x=>x.id!=${d.id}); renderMoney(); runCalculation();">×</button></div>`).join('');
+    }
+
+    function runCalculation() {
+        if(!cProds.length || cProds.every(r => !r.price)) { document.getElementById("calcResultView").classList.add("hidden"); return; }
+        const type = document.getElementById("custType").value;
+        const typeLabel = type==='student'?'修科生':type==='member'?'しゅう美会生':'講師';
+        let tB = 0, tD = 0, lines = [];
+        
+        cProds.forEach(r => {
+            const price = parseFloat(r.price)||0;
+            let displayName = "";
+            const catObj = appData.customCats.find(c => c.id === r.cat);
+            if(catObj) displayName = catObj.name;
+            else {
+                const labels = {guard:"ガード", lining:"裏物", tailor:"仕立", other:"その他"};
+                if(r.preId && appData.preset[r.cat]) {
+                    const subItem = appData.preset[r.cat].find(i => i.id == r.preId);
+                    displayName = subItem ? subItem.name : labels[r.cat];
+                } else displayName = labels[r.cat] || "未設定";
+            }
+            const rate = appData.catDisc[r.cat] ? (appData.catDisc[r.cat][type]||0) : (appData.prodDisc[`${r.cat}_${r.preId}`]?.[type]||0);
+            const disc = price * (rate/100); tB += price; tD += disc;
+            lines.push(`<div class="receipt-row"><span>${displayName}</span><span>¥${Math.round(price).toLocaleString()}</span></div><div class="receipt-row" style="color:var(--err); font-size:11px;"><span>└ 割引(${rate}%)</span><span>-¥${Math.round(disc).toLocaleString()}</span></div>`);
+        });
+        
+        const coupons = cCoupons.reduce((s,c)=>s+(parseFloat(c.price)||0),0);
+        const downs = cDowns.reduce((s,d)=>s+(parseFloat(d.price)||0),0);
+        
+        const target = Math.max(0, Math.round(tB - tD - coupons - downs));
+
+        let rHtml = `<div class="receipt-title">御計算明細書 (${typeLabel})</div>${lines.join('')}<div class="receipt-hr"></div><div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div><div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>${coupons>0?`<div class="receipt-row"><span>金券控除</span><span>-¥${coupons.toLocaleString()}</span></div>`:''}${downs>0?`<div class="receipt-row"><span>頭金控除</span><span>-¥${downs.toLocaleString()}</span></div>`:''}<div class="receipt-row receipt-total"><span>お支払対象額 (元金)</span><span>¥${target.toLocaleString()}</span></div>`;
+        
+        let cHtml = "";
+        appData.cards.forEach(c => {
+            const p = parseInt(document.getElementById(`p_${c.id}`).value) || 1;
+            const sMonth = parseInt(document.getElementById(`s_${c.id}`).value) || 0;
+            
+            const bRate = parseFloat(c.pay[p]) || 0;
+            const sRate = parseFloat(c.skip[sMonth]) || 0;
+            
+            const totalRate = bRate + sRate;
+            const totalFee = Math.floor(target * (totalRate / 100)); 
+            
+            const bFee = Math.floor(target * (bRate / 100));
+            const sFee = totalFee - bFee; 
+            
+            const finalTotal = target + totalFee; 
+            const monthly = Math.floor(finalTotal / p); 
+
+            cHtml += `<div class="card-res-box"><b>${c.name}</b>
+                <div class="receipt-row" style="font-size:11px; margin-top:5px;"><span>支払回数手数料 (${p}回・${bRate}%)</span><span>¥${bFee.toLocaleString()}</span></div>
+                <div class="receipt-row" style="font-size:11px;"><span>スキップ手数料 (${sMonth}ヶ月・${sRate}%)</span><span>¥${sFee.toLocaleString()}</span></div>
+                <div class="receipt-row" style="margin-top:5px; font-weight:bold; color:var(--text);"><span>手数料合計 (${totalRate.toFixed(1)}%)</span><span>¥${totalFee.toLocaleString()}</span></div>
+                <div class="receipt-row receipt-total" style="border-top:1px solid #ccc; margin-top:8px; padding-top:8px;"><span>お支払い合計額</span><span>¥${finalTotal.toLocaleString()}</span></div>
+                <div class="receipt-row" style="margin-top:5px;"><span>1回で支払う金額</span><span style="font-size:17px; font-weight:bold; color:var(--p);">¥${monthly.toLocaleString()}</span></div></div>`;
+        });
+        
+        document.getElementById("receiptUI").innerHTML = rHtml; 
+        document.getElementById("cardUI").innerHTML = cHtml;
+        document.getElementById("calcResultView").classList.remove("hidden");
+    }
+
+    async function saveToHistory() {
+        if(document.getElementById("calcResultView").classList.contains("hidden")) return;
+        const btn = document.getElementById("saveBtn"); btn.innerText = "保存中..."; btn.disabled = true;
+        const html = document.getElementById("fullReceiptWrapper").innerHTML;
+        appData.history.unshift({date:Date.now(), html:html});
+        if(appData.history.length > 20) appData.history.pop();
+        await pushData(); renderHistory(); btn.innerText = "計算結果を履歴に保存"; btn.disabled = false; alert("詳細明細を履歴に保存しました");
+    }
+
+    function renderHistory() {
+        document.getElementById("historyListArea").innerHTML = appData.history.length ? appData.history.map((h, i) => `<div class="box"><p style="font-size:10px; color:#999; margin-bottom:8px;">保存日時: ${new Date(h.date).toLocaleString()}</p><div>${h.html}</div><button class="btn-del" onclick="if(confirm('削除しますか？')){appData.history.splice(${i},1);pushData();renderHistory();}">削除</button></div>`).join('') : '<p style="text-align:center; padding:30px; color:#999;">履歴なし</p>';
+    }
+
+    // --- リスト管理 ---
+    function openDetail(t) { document.getElementById("presetMenu").classList.add("hidden"); document.getElementById("presetDetail").classList.remove("hidden"); renderDetail(t); }
+    function closeDetail() { document.getElementById("presetMenu").classList.remove("hidden"); document.getElementById("presetDetail").classList.add("hidden"); }
+
+    function renderDetail(type) {
+        const container = document.getElementById("detailContent"); let h = "";
+        if(type==='card') {
+            h += `<h2>カード種類管理</h2><div id="sort-cards">` + appData.cards.map((c,i)=>`<div class="box flex-between" data-id="${i}"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.cards[${i}].name=this.value;pushData();refreshAllCalcUI();"><button class="btn-del" onclick="appData.cards.splice(${i},1);pushData();renderDetail('card');">×</button></div>`).join('') + `</div><button class="btn-mini-add" onclick="appData.cards.push({id:'c'+Date.now(),name:'新規カード',pay:{12:0},skip:{0:0}});pushData();renderDetail('card');">+ カード追加</button>`;
+            h += `<hr style="margin:20px 0;"><h2>支払い回数・手数料(%)</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="appData.cards[${idx}].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].pay[${k}];pushData();renderDetail('card');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何回払い？'); if(v){appData.cards[${idx}].pay[v]=0;pushData();renderDetail('card');}">+ 回数追加</button></div>`).join('');
+        } else if(type==='skip') {
+            h += `<h2>スキップ手数料管理</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}ヶ月スキップ(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.skip[k]}" oninput="appData.cards[${idx}].skip[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].skip[${k}];pushData();renderDetail('skip');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何ヶ月スキップ？'); if(v){appData.cards[${idx}].skip[v]=0;pushData();renderDetail('skip');}">+ スキップ月数を追加</button></div>`).join('');
+        } else if(['guard','lining','tailor','other'].includes(type)) {
+            h += `<h2>${type==='guard'?'ガード':type==='lining'?'裏物':type==='tailor'?'仕立':'その他'}管理</h2><div id="sort-preset">` + (appData.preset[type]||[]).map((p,i)=>{
+                const d = (appData.prodDisc && appData.prodDisc[`${type}_${p.id}`]) || {student:0, member:0, instructor:0};
+                return `<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${p.name}" oninput="appData.preset['${type}'][${i}].name=this.value;pushData();"></div><label>定価</label><input type="number" value="${p.price}" oninput="appData.preset['${type}'][${i}].price=this.value;pushData();">
+                <div class="grid-3"><input type="number" value="${d.student}" oninput="updProdDisc('${type}',${p.id},'student',this.value)"><input type="number" value="${d.member}" oninput="updProdDisc('${type}',${p.id},'member',this.value)"><input type="number" value="${d.instructor}" oninput="updProdDisc('${type}',${p.id},'instructor',this.value)"></div><button class="btn-del" onclick="appData.preset['${type}'].splice(${i},1);pushData();renderDetail('${type}');">削除</button></div>`;
+            }).join('') + `</div><button class="btn-mini-add" onclick="if(!appData.preset['${type}'])appData.preset['${type}']=[]; appData.preset['${type}'].push({id:Date.now(),name:'新規',price:0});pushData();renderDetail('${type}');">+ 追加</button>`;
+        } else if(type==='category') {
+            h += `<h2>カテゴリー・割引率設定</h2><div id="sort-cat">` + (appData.customCats||[]).map((c,i)=>`<div class="box" data-id="${i}"><div class="flex-between"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.customCats[${i}].name=this.value;pushData();renderProductRows();"><button class="btn-del" onclick="appData.customCats.splice(${i},1);pushData();renderDetail('category');">×</button></div>
+                <div class="grid-3"><div><label>修科</label><input type="number" value="${appData.catDisc[c.id]?.student||0}" oninput="updCatDisc('${c.id}','student',this.value)"></div><div><label>しゅう</label><input type="number" value="${appData.catDisc[c.id]?.member||0}" oninput="updCatDisc('${c.id}','member',this.value)"></div><div><label>講師</label><input type="number" value="${appData.catDisc[c.id]?.instructor||0}" oninput="updCatDisc('${c.id}','instructor',this.value)"></div></div></div>`).join('') + `</div><button class="btn-mini-add" onclick="const id='c'+Date.now(); appData.customCats.push({id:id,name:'新規カテゴリー'}); appData.catDisc[id]={student:0,member:0,instructor:0};pushData();renderDetail('category');">+ カテゴリー追加</button>`;
+        }
+        container.innerHTML = h; initSort(type);
+    }
+
+    function initSort(type) {
+        const el = document.querySelector('[id^="sort-"]'); if(!el) return;
+        new Sortable(el, { handle: '.sortable-handle', animation: 150, onEnd: () => {
+            const newOrder = Array.from(el.children).map(child => parseInt(child.dataset.id));
+            if(type==='card') appData.cards = newOrder.map(idx => appData.cards[idx]);
+            else if(type==='category') appData.customCats = newOrder.map(idx => appData.customCats[idx]);
+            else appData.preset[type] = newOrder.map(idx => appData.preset[type][idx]);
+            pushData(); renderDetail(type); refreshAllCalcUI();
+        }});
+    }
+
+    function updCatDisc(id,t,v) { if(!appData.catDisc[id]) appData.catDisc[id]={}; appData.catDisc[id][t]=parseFloat(v)||0; pushData(); }
+    function updProdDisc(c,id,t,v) { if(!appData.prodDisc) appData.prodDisc={}; const k=`${c}_${id}`; if(!appData.prodDisc[k]) appData.prodDisc[k]={}; appData.prodDisc[k][t]=parseFloat(v)||0; pushData(); }
+
+    function showPage(n) { document.querySelectorAll(".page-content").forEach(p=>p.classList.add("hidden")); document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active")); document.getElementById("page-"+n).classList.remove("hidden"); document.getElementById("tab-"+n.substring(0,3)).classList.add("active"); if(n==="preset") closeDetail(); if(n==="history") renderHistory(); }
+
+    function refreshAllCalcUI() {
+        document.getElementById("cardQuickSettingArea").innerHTML = (appData.cards||[]).map(c => `
+            <section><h2>${c.name} 設定</h2><div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>回数</label><select id="p_${c.id}" onchange="runCalculation()">${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k}回</option>`).join('')}</select></div>
+            <div style="flex:1;"><label>スキップ(月)</label><select id="s_${c.id}" onchange="runCalculation()">${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k==0?'なし':k+'ヶ月'}</option>`).join('')}</select></div>
+            </div></section>`).join('');
+    }
+</script>
+</body>
+</html>
