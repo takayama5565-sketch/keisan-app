@@ -52,17 +52,10 @@
 <body>
 
 <div class="container">
-    <div id="setupScreen" class="box" style="margin-top: 40px;">
-        <h2 style="text-align:center;">データの復元と開始</h2>
-        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">合言葉を入力してください。</p>
-        <input type="text" id="secretInput" placeholder="例: tanaka-app-2026">
-        <button class="btn-add" onclick="launchApp()">復元して開始</button>
-    </div>
-
-    <div id="mainView" class="hidden">
+    <div id="mainView">
         <header style="text-align:center; padding-bottom:15px;">
             <h1 style="font-size:18px; color:var(--p);">分割手数料計算 Pro</h1>
-            <div id="syncIndicator" style="font-size:9px; color:#aaa; margin-top:5px;">同期済み</div>
+            <div id="syncIndicator" style="font-size:9px; color:#aaa; margin-top:5px;">読込中...</div>
         </header>
 
         <div class="tabs">
@@ -115,7 +108,6 @@
                 <button class="menu-btn" onclick="openDetail('tailor')">仕立管理</button>
                 <button class="menu-btn" onclick="openDetail('other')">その他管理</button>
                 <button class="menu-btn" onclick="openDetail('category')">カテゴリー割引設定</button>
-                <button onclick="if(confirm('リセットしますか？')){localStorage.clear();location.reload();}" style="background:none; color:red; border:1px solid red; margin-top:20px;">合言葉をリセット</button>
             </div>
             <div id="presetDetail" class="hidden">
                 <button class="btn-back" onclick="closeDetail()">← メニューへ戻る</button>
@@ -138,50 +130,52 @@
     firebase.initializeApp(fbConfig);
     const db = firebase.firestore();
 
-    let appKey = "";
+    // ★ 合言葉を裏側で固定 ★
+    let appKey = "auto_login_master_key"; 
     let appData = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let cProds = []; let cCoupons = []; let cDowns = [];
 
-    // --- 起動 & 同期 ---
-    async function launchApp() {
-        const k = document.getElementById("secretInput").value.trim();
-        if(!k) return alert("合言葉を入力してください");
-        appKey = k; localStorage.setItem("v_final_app_key", appKey);
+    // --- 起動 & 同期 (自動実行) ---
+    window.onload = async function() {
         await syncData();
-    }
+    };
 
     async function syncData() {
         document.getElementById("syncIndicator").innerText = "同期中...";
-        const doc = await db.collection("shared_users").doc(appKey).get();
-        if(doc.exists) {
-            appData = doc.data();
-            if(!appData.history) appData.history = [];
-            // カードごとのスキップデータが無い場合の補完
-            if(appData.cards) {
-                appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
+        try {
+            const doc = await db.collection("shared_users").doc(appKey).get();
+            if(doc.exists) {
+                appData = doc.data();
+                if(!appData.history) appData.history = [];
+                if(appData.cards) {
+                    appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
+                }
+            } else {
+                appData.cards = [
+                    { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
+                    { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
+                ];
+                appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
+                appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
+                await pushData();
             }
-        } else {
-            // 初期データ（カードごとに回数・スキップを持たせる正しい構造）
-            appData.cards = [
-                { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
-                { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
-            ];
-            appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
-            appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
-            await pushData();
+            document.getElementById("syncIndicator").innerText = "接続済み";
+            refreshAllCalcUI();
+            if(!cProds.length) addProductRow();
+        } catch(e) {
+            document.getElementById("syncIndicator").innerText = "接続エラー";
+            alert("データベースに接続できません。Firebaseの有効期限やAPIキーの設定をご確認ください。");
         }
-        document.getElementById("setupScreen").classList.add("hidden");
-        document.getElementById("mainView").classList.remove("hidden");
-        document.getElementById("syncIndicator").innerText = "接続済み: " + appKey;
-        refreshAllCalcUI();
-        if(!cProds.length) addProductRow();
     }
 
     async function pushData() {
-        if(!appKey) return;
         document.getElementById("syncIndicator").innerText = "保存中...";
-        await db.collection("shared_users").doc(appKey).set(appData);
-        document.getElementById("syncIndicator").innerText = "同期済み";
+        try {
+            await db.collection("shared_users").doc(appKey).set(appData);
+            document.getElementById("syncIndicator").innerText = "同期済み";
+        } catch(e) {
+            document.getElementById("syncIndicator").innerText = "保存エラー";
+        }
     }
 
     // --- 計算・入力 ---
@@ -207,7 +201,6 @@
         document.getElementById("downList").innerHTML = cDowns.map(d=>`<div class="flex-between"><input type="number" placeholder="頭金額を入力" value="${d.price}" oninput="cDowns.find(x=>x.id==${d.id}).price=this.value; runCalculation();"><button class="btn-del" onclick="cDowns=cDowns.filter(x=>x.id!=${d.id}); renderMoney(); runCalculation();">×</button></div>`).join('');
     }
 
-    // ★ 根本修正：計算ロジック ★
     function runCalculation() {
         if(!cProds.length || cProds.every(r => !r.price)) { document.getElementById("calcResultView").classList.add("hidden"); return; }
         const type = document.getElementById("custType").value;
@@ -234,7 +227,6 @@
         const coupons = cCoupons.reduce((s,c)=>s+(parseFloat(c.price)||0),0);
         const downs = cDowns.reduce((s,d)=>s+(parseFloat(d.price)||0),0);
         
-        // 元金の計算（小計 - 値引き - 金券 - 頭金）
         const target = Math.max(0, Math.round(tB - tD - coupons - downs));
 
         let rHtml = `<div class="receipt-title">御計算明細書 (${typeLabel})</div>${lines.join('')}<div class="receipt-hr"></div><div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div><div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>${coupons>0?`<div class="receipt-row"><span>金券控除</span><span>-¥${coupons.toLocaleString()}</span></div>`:''}${downs>0?`<div class="receipt-row"><span>頭金控除</span><span>-¥${downs.toLocaleString()}</span></div>`:''}<div class="receipt-row receipt-total"><span>お支払対象額 (元金)</span><span>¥${target.toLocaleString()}</span></div>`;
@@ -244,20 +236,17 @@
             const p = parseInt(document.getElementById(`p_${c.id}`).value) || 1;
             const sMonth = parseInt(document.getElementById(`s_${c.id}`).value) || 0;
             
-            // 利率の取得
             const bRate = parseFloat(c.pay[p]) || 0;
             const sRate = parseFloat(c.skip[sMonth]) || 0;
             
-            // 【重要】手数料合計: （元金 × 回数利率＋スキップ利率）
             const totalRate = bRate + sRate;
-            const totalFee = Math.floor(target * (totalRate / 100)); // 手数料合計
+            const totalFee = Math.floor(target * (totalRate / 100)); 
             
-            // 内訳表示用の金額算出
             const bFee = Math.floor(target * (bRate / 100));
-            const sFee = totalFee - bFee; // 誤差調整
+            const sFee = totalFee - bFee; 
             
-            const finalTotal = target + totalFee; // 支払い合計
-            const monthly = Math.floor(finalTotal / p); // 1回で支払う金額（切り捨て）
+            const finalTotal = target + totalFee; 
+            const monthly = Math.floor(finalTotal / p); 
 
             cHtml += `<div class="card-res-box"><b>${c.name}</b>
                 <div class="receipt-row" style="font-size:11px; margin-top:5px;"><span>支払回数手数料 (${p}回・${bRate}%)</span><span>¥${bFee.toLocaleString()}</span></div>
@@ -272,7 +261,6 @@
         document.getElementById("calcResultView").classList.remove("hidden");
     }
 
-    // --- 履歴保存 ---
     async function saveToHistory() {
         if(document.getElementById("calcResultView").classList.contains("hidden")) return;
         const btn = document.getElementById("saveBtn"); btn.innerText = "保存中..."; btn.disabled = true;
@@ -333,9 +321,6 @@
             <div style="flex:1;"><label>スキップ(月)</label><select id="s_${c.id}" onchange="runCalculation()">${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k==0?'なし':k+'ヶ月'}</option>`).join('')}</select></div>
             </div></section>`).join('');
     }
-
-    const savedK = localStorage.getItem("v_final_app_key");
-    if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
 </script>
 </body>
 </html>
