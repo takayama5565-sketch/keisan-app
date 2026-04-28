@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro v24</title>
+    <title>分割手数料計算 Pro v26</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -56,13 +56,19 @@
         <h2 style="text-align:center;">ログイン / 新規登録</h2>
         <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">
             お好きなIDとパスワードを決めて入力してください。<br>
-            ※履歴を消去しても、これらを入力すれば復元できます。
+            ※一度ログインすれば、次回からこの画面は出ません。
         </p>
         <label>ユーザーID</label>
         <input type="text" id="userIdInput" placeholder="例: yamada">
+        
         <label>パスワード</label>
-        <input type="password" id="userPassInput" placeholder="例: 1234">
+        <div style="display:flex; gap:5px; margin-bottom:10px;">
+            <input type="password" id="userPassInput" placeholder="例: 1234" style="margin-bottom:0;">
+            <button onclick="togglePass('userPassInput')" style="width:70px; background:#eee; color:#333; padding:12px 0;">確認</button>
+        </div>
+        
         <button class="btn-add" onclick="loginApp()">ログインして開始</button>
+        <div id="loginError" style="color:var(--err); font-size:11px; margin-top:10px; text-align:center;"></div>
     </div>
 
     <div id="mainView" class="hidden">
@@ -114,6 +120,7 @@
 
         <div id="page-preset" class="page-content hidden">
             <div id="presetMenu">
+                <button class="menu-btn" onclick="openDetail('account')">アカウント設定（ID変更）</button>
                 <button class="menu-btn" onclick="openDetail('card')">カード管理</button>
                 <button class="menu-btn" onclick="openDetail('skip')">スキップ管理</button>
                 <button class="menu-btn" onclick="openDetail('guard')">ガード管理</button>
@@ -135,11 +142,10 @@
 <script>
     // =========================================================================
     // 【重要】ここでFirebaseの接続設定を行います
-    // 下記の「ここにAPIキーを入力してください」などを、ご自身の本物の鍵に書き換えてください。
     // =========================================================================
     const fbConfig = {
-        apiKey: "ここにAPIキーを入力してください",
-        authDomain: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
+        apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
+        authDomain: "my-app-eb01f.firebaseapp.com",
         projectId: "my-app-eb01f",
         storageBucket: "my-app-eb01f.firebasestorage.app",
         messagingSenderId: "225201328715",
@@ -149,19 +155,26 @@
     const db = firebase.firestore();
     // =========================================================================
 
-
     let appKey = "";
     let appData = { password:"", preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let cProds = []; let cCoupons = []; let cDowns = [];
 
-    // --- 起動 & 同期 ---
+    // パスワードの表示・非表示切り替え
+    function togglePass(id) {
+        const input = document.getElementById(id);
+        input.type = input.type === "password" ? "text" : "password";
+    }
+
+    // ログイン処理
     async function loginApp() {
         const uid = document.getElementById("userIdInput").value.trim();
         const pass = document.getElementById("userPassInput").value.trim();
+        const errBox = document.getElementById("loginError");
+        errBox.innerText = "";
         
         if(!uid || !pass) return alert("ユーザーIDとパスワードの両方を入力してください");
         
-        document.getElementById("syncIndicator").innerText = "認証中...";
+        document.getElementById("syncIndicator").innerText = "通信中...";
         appKey = uid;
 
         try {
@@ -170,7 +183,8 @@
                 appData = doc.data();
                 if(appData.password && appData.password !== pass) {
                     document.getElementById("syncIndicator").innerText = "エラー";
-                    return alert("パスワードが違います。すでに他の人が使用しているIDの可能性があります。");
+                    errBox.innerText = "パスワードが違います。すでに他の人が使用しているIDの可能性があります。";
+                    return;
                 }
                 if(!appData.history) appData.history = [];
                 if(appData.cards) {
@@ -187,8 +201,9 @@
                 await pushData();
             }
             
-            localStorage.setItem("v24_user_id", uid);
-            localStorage.setItem("v24_user_pass", pass);
+            // 自動ログイン用にスマホに記憶させる
+            localStorage.setItem("v26_user_id", uid);
+            localStorage.setItem("v26_user_pass", pass);
             
             document.getElementById("setupScreen").classList.add("hidden");
             document.getElementById("mainView").classList.remove("hidden");
@@ -199,16 +214,45 @@
             
         } catch(e) {
             console.error(e);
-            alert("通信エラーが発生しました。Firebaseの設定やネット環境をご確認ください。");
-            document.getElementById("syncIndicator").innerText = "エラー";
+            errBox.innerText = "【通信エラー】APIキーの設定が間違っているか、パソコンのファイルを直接開いている（制限ブロック）ため進めません。GitHubのURLから開いてください。\n詳細: " + e.message;
+            document.getElementById("syncIndicator").innerText = "通信エラー";
         }
     }
 
     function logoutApp() {
         if(confirm("ログアウトしますか？")) {
-            localStorage.removeItem("v24_user_id");
-            localStorage.removeItem("v24_user_pass");
+            localStorage.removeItem("v26_user_id");
+            localStorage.removeItem("v26_user_pass");
             location.reload();
+        }
+    }
+
+    // アカウント情報の変更保存
+    async function updateAccount() {
+        const newId = document.getElementById("newUserId").value.trim();
+        const newPass = document.getElementById("newUserPass").value.trim();
+        if(!newId || !newPass) return alert("空欄にはできません");
+        
+        try {
+            if(newId !== appKey) {
+                const doc = await db.collection("shared_users").doc(newId).get();
+                if(doc.exists) return alert("そのユーザーIDは既に他の人が使っています。別のIDにしてください。");
+                
+                appData.password = newPass;
+                await db.collection("shared_users").doc(newId).set(appData);
+                await db.collection("shared_users").doc(appKey).delete();
+                appKey = newId;
+            } else {
+                appData.password = newPass;
+                await pushData();
+            }
+            
+            localStorage.setItem("v26_user_id", appKey);
+            localStorage.setItem("v26_user_pass", newPass);
+            alert("アカウント情報を変更しました！");
+            closeDetail();
+        } catch(e) {
+            alert("エラーが発生しました: " + e.message);
         }
     }
 
@@ -275,16 +319,12 @@
         appData.cards.forEach(c => {
             const p = parseInt(document.getElementById(`p_${c.id}`).value) || 1;
             const sMonth = parseInt(document.getElementById(`s_${c.id}`).value) || 0;
-            
             const bRate = parseFloat(c.pay[p]) || 0;
             const sRate = parseFloat(c.skip[sMonth]) || 0;
-            
             const totalRate = bRate + sRate;
             const totalFee = Math.floor(target * (totalRate / 100)); 
-            
             const bFee = Math.floor(target * (bRate / 100));
             const sFee = totalFee - bFee; 
-            
             const finalTotal = target + totalFee; 
             const monthly = Math.floor(finalTotal / p); 
 
@@ -320,11 +360,18 @@
 
     function renderDetail(type) {
         const container = document.getElementById("detailContent"); let h = "";
-        if(type==='card') {
+        if(type==='account') {
+            h += `<h2>アカウント情報変更</h2><div class="box"><p style="font-size:11px; color:#666; margin-bottom:15px;">新しいIDやパスワードに変更できます。データは引き継がれます。</p>
+            <label>新しいユーザーID</label><input type="text" id="newUserId" value="${appKey}">
+            <label>新しいパスワード</label>
+            <div style="display:flex; gap:5px; margin-bottom:15px;"><input type="password" id="newUserPass" value="${appData.password}" style="margin-bottom:0;"><button onclick="togglePass('newUserPass')" style="width:70px; background:#eee; color:#333; padding:12px 0;">確認</button></div>
+            <button class="btn-add" onclick="updateAccount()">変更を保存</button></div>`;
+        } else if(type==='card') {
             h += `<h2>カード種類管理</h2><div id="sort-cards">` + appData.cards.map((c,i)=>`<div class="box flex-between" data-id="${i}"><span class="sortable-handle">☰</span><input value="${c.name}" oninput="appData.cards[${i}].name=this.value;pushData();refreshAllCalcUI();"><button class="btn-del" onclick="appData.cards.splice(${i},1);pushData();renderDetail('card');">×</button></div>`).join('') + `</div><button class="btn-mini-add" onclick="appData.cards.push({id:'c'+Date.now(),name:'新規カード',pay:{12:0},skip:{0:0}});pushData();renderDetail('card');">+ カード追加</button>`;
-            h += `<hr style="margin:20px 0;"><h2>支払い回数・手数料(%)</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="appData.cards[${idx}].pay[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].pay[${k}];pushData();renderDetail('card');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何回払い？'); if(v){appData.cards[${idx}].pay[v]=0;pushData();renderDetail('card');}">+ 回数追加</button></div>`).join('');
+            // 【修正箇所】「×」ボタンの処理を強化＆追加時の文字入力をブロック
+            h += `<hr style="margin:20px 0;"><h2>支払い回数・手数料(%)</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.pay).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}回(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.pay[k]}" oninput="appData.cards[${idx}].pay['${k}']=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].pay['${k}'];pushData();renderDetail('card');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何回払い？(半角数字のみ入力してください)'); if(v){const num=v.replace(/[^0-9]/g,''); if(num){appData.cards[${idx}].pay[num]=0;pushData();renderDetail('card');}}">+ 回数追加</button></div>`).join('');
         } else if(type==='skip') {
-            h += `<h2>スキップ手数料管理</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}ヶ月スキップ(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.skip[k]}" oninput="appData.cards[${idx}].skip[${k}]=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].skip[${k}];pushData();renderDetail('skip');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何ヶ月スキップ？'); if(v){appData.cards[${idx}].skip[v]=0;pushData();renderDetail('skip');}">+ スキップ月数を追加</button></div>`).join('');
+            h += `<h2>スキップ手数料管理</h2>` + appData.cards.map((c,idx)=>`<div class="box"><b>${c.name}</b>${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<div class="receipt-row" style="margin-top:5px;"><span>${k}ヶ月スキップ(%)</span><div class="flex-between"><input type="number" step="0.1" value="${c.skip[k]}" oninput="appData.cards[${idx}].skip['${k}']=this.value;pushData();"><button class="btn-del" onclick="delete appData.cards[${idx}].skip['${k}'];pushData();renderDetail('skip');">×</button></div></div>`).join('')}<button class="btn-mini-add" style="margin-top:10px;" onclick="const v=prompt('何ヶ月スキップ？(半角数字のみ入力してください)'); if(v){const num=v.replace(/[^0-9]/g,''); if(num){appData.cards[${idx}].skip[num]=0;pushData();renderDetail('skip');}}">+ スキップ月数を追加</button></div>`).join('');
         } else if(['guard','lining','tailor','other'].includes(type)) {
             h += `<h2>${type==='guard'?'ガード':type==='lining'?'裏物':type==='tailor'?'仕立':'その他'}管理</h2><div id="sort-preset">` + (appData.preset[type]||[]).map((p,i)=>{
                 const d = (appData.prodDisc && appData.prodDisc[`${type}_${p.id}`]) || {student:0, member:0, instructor:0};
@@ -362,13 +409,13 @@
             </div></section>`).join('');
     }
 
-    // --- 自動ログイン判定 ---
-    const savedUid = localStorage.getItem("v24_user_id");
-    const savedPass = localStorage.getItem("v24_user_pass");
+    // --- 完全自動ログイン判定 ---
+    const savedUid = localStorage.getItem("v26_user_id");
+    const savedPass = localStorage.getItem("v26_user_pass");
     if(savedUid && savedPass) { 
         document.getElementById("userIdInput").value = savedUid; 
         document.getElementById("userPassInput").value = savedPass; 
-        loginApp(); 
+        loginApp(); // 画面を開いた瞬間に自動でログイン実行
     }
 </script>
 </body>
