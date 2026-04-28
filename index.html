@@ -137,14 +137,14 @@
     // 【重要】ここでFirebaseの接続設定を行います
     // 下記の「ここにAPIキーを入力してください」などを、ご自身の本物の鍵に書き換えてください。
     // =========================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
-  authDomain: "my-app-eb01f.firebaseapp.com",
-  projectId: "my-app-eb01f",
-  storageBucket: "my-app-eb01f.firebasestorage.app",
-  messagingSenderId: "225201328715",
-  appId: "1:225201328715:web:952f9d2d3c4653543eb3ce"
-};
+    const fbConfig = {
+        apiKey: "ここにAPIキーを入力してください",
+        authDomain: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
+        projectId: "my-app-eb01f",
+        storageBucket: "my-app-eb01f.firebasestorage.app",
+        messagingSenderId: "225201328715",
+        appId: "1:225201328715:web:952f9d2d3c4653543eb3ce"
+    };
     firebase.initializeApp(fbConfig);
     const db = firebase.firestore();
     // =========================================================================
