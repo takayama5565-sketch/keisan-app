@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro 決定版</title>
+    <title>分割手数料計算 Pro v22</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -52,10 +52,20 @@
 <body>
 
 <div class="container">
-    <div id="mainView">
+    <div id="setupScreen" class="box" style="margin-top: 40px;">
+        <h2 style="text-align:center;">クラウド同期ログイン</h2>
+        <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">
+            専用のユーザーIDを入力してください。<br>
+            ※このIDごとに設定や履歴が個別に保存されます。
+        </p>
+        <input type="text" id="secretInput" placeholder="例: takayama-1234">
+        <button class="btn-add" onclick="launchApp()">同期して開始</button>
+    </div>
+
+    <div id="mainView" class="hidden">
         <header style="text-align:center; padding-bottom:15px;">
             <h1 style="font-size:18px; color:var(--p);">分割手数料計算 Pro</h1>
-            <div id="syncIndicator" style="font-size:9px; color:#aaa; margin-top:5px;">読込中...</div>
+            <div id="syncIndicator" style="font-size:9px; color:#aaa; margin-top:5px;">同期済み</div>
         </header>
 
         <div class="tabs">
@@ -108,6 +118,9 @@
                 <button class="menu-btn" onclick="openDetail('tailor')">仕立管理</button>
                 <button class="menu-btn" onclick="openDetail('other')">その他管理</button>
                 <button class="menu-btn" onclick="openDetail('category')">カテゴリー割引設定</button>
+                <hr style="margin: 20px 0;">
+                <button onclick="logoutApp()" style="background:none; color:red; border:1px solid red;">ログアウト（ID変更）</button>
+                <p style="font-size:10px; color:#999; text-align:center; margin-top:10px;">※履歴消去後は再度ログインが必要です</p>
             </div>
             <div id="presetDetail" class="hidden">
                 <button class="btn-back" onclick="closeDetail()">← メニューへ戻る</button>
@@ -130,52 +143,58 @@
     firebase.initializeApp(fbConfig);
     const db = firebase.firestore();
 
-    // ★ 合言葉を裏側で固定 ★
-    let appKey = "auto_login_master_key"; 
+    let appKey = "";
     let appData = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let cProds = []; let cCoupons = []; let cDowns = [];
 
-    // --- 起動 & 同期 (自動実行) ---
-    window.onload = async function() {
+    // --- 起動 & 同期 ---
+    async function launchApp() {
+        const k = document.getElementById("secretInput").value.trim();
+        if(!k) return alert("ユーザーIDを入力してください");
+        appKey = k; 
+        localStorage.setItem("v22_user_id", appKey); // Safariが記憶している間は自動ログイン
         await syncData();
-    };
+    }
 
-    async function syncData() {
-        document.getElementById("syncIndicator").innerText = "同期中...";
-        try {
-            const doc = await db.collection("shared_users").doc(appKey).get();
-            if(doc.exists) {
-                appData = doc.data();
-                if(!appData.history) appData.history = [];
-                if(appData.cards) {
-                    appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
-                }
-            } else {
-                appData.cards = [
-                    { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
-                    { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
-                ];
-                appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
-                appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
-                await pushData();
-            }
-            document.getElementById("syncIndicator").innerText = "接続済み";
-            refreshAllCalcUI();
-            if(!cProds.length) addProductRow();
-        } catch(e) {
-            document.getElementById("syncIndicator").innerText = "接続エラー";
-            alert("データベースに接続できません。Firebaseの有効期限やAPIキーの設定をご確認ください。");
+    function logoutApp() {
+        if(confirm("ログアウトしますか？（他のIDでログインできます）")) {
+            localStorage.removeItem("v22_user_id");
+            location.reload();
         }
     }
 
-    async function pushData() {
-        document.getElementById("syncIndicator").innerText = "保存中...";
-        try {
-            await db.collection("shared_users").doc(appKey).set(appData);
-            document.getElementById("syncIndicator").innerText = "同期済み";
-        } catch(e) {
-            document.getElementById("syncIndicator").innerText = "保存エラー";
+    async function syncData() {
+        document.getElementById("syncIndicator").innerText = "同期中...";
+        document.getElementById("setupScreen").classList.add("hidden");
+        document.getElementById("mainView").classList.remove("hidden");
+
+        const doc = await db.collection("shared_users").doc(appKey).get();
+        if(doc.exists) {
+            appData = doc.data();
+            if(!appData.history) appData.history = [];
+            if(appData.cards) {
+                appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
+            }
+        } else {
+            // 新規IDの初期データ
+            appData.cards = [
+                { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
+                { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
+            ];
+            appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
+            appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
+            await pushData();
         }
+        document.getElementById("syncIndicator").innerText = "接続中: " + appKey;
+        refreshAllCalcUI();
+        if(!cProds.length) addProductRow();
+    }
+
+    async function pushData() {
+        if(!appKey) return;
+        document.getElementById("syncIndicator").innerText = "保存中...";
+        await db.collection("shared_users").doc(appKey).set(appData);
+        document.getElementById("syncIndicator").innerText = "同期完了";
     }
 
     // --- 計算・入力 ---
@@ -226,7 +245,6 @@
         
         const coupons = cCoupons.reduce((s,c)=>s+(parseFloat(c.price)||0),0);
         const downs = cDowns.reduce((s,d)=>s+(parseFloat(d.price)||0),0);
-        
         const target = Math.max(0, Math.round(tB - tD - coupons - downs));
 
         let rHtml = `<div class="receipt-title">御計算明細書 (${typeLabel})</div>${lines.join('')}<div class="receipt-hr"></div><div class="receipt-row"><span>小計(定価)</span><span>¥${Math.round(tB).toLocaleString()}</span></div><div class="receipt-row"><span>値引合計</span><span>-¥${Math.round(tD).toLocaleString()}</span></div>${coupons>0?`<div class="receipt-row"><span>金券控除</span><span>-¥${coupons.toLocaleString()}</span></div>`:''}${downs>0?`<div class="receipt-row"><span>頭金控除</span><span>-¥${downs.toLocaleString()}</span></div>`:''}<div class="receipt-row receipt-total"><span>お支払対象額 (元金)</span><span>¥${target.toLocaleString()}</span></div>`;
@@ -321,6 +339,10 @@
             <div style="flex:1;"><label>スキップ(月)</label><select id="s_${c.id}" onchange="runCalculation()">${Object.keys(c.skip).sort((a,b)=>a-b).map(k=>`<option value="${k}">${k==0?'なし':k+'ヶ月'}</option>`).join('')}</select></div>
             </div></section>`).join('');
     }
+
+    // --- 自動ログイン判定 ---
+    const savedK = localStorage.getItem("v22_user_id");
+    if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
 </script>
 </body>
 </html>
