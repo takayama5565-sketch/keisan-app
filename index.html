@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>分割手数料計算 Pro v22</title>
+    <title>分割手数料計算 Pro v24</title>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -53,13 +53,16 @@
 
 <div class="container">
     <div id="setupScreen" class="box" style="margin-top: 40px;">
-        <h2 style="text-align:center;">クラウド同期ログイン</h2>
+        <h2 style="text-align:center;">ログイン / 新規登録</h2>
         <p style="font-size:12px; margin-bottom:15px; color:#666; text-align:center;">
-            専用のユーザーIDを入力してください。<br>
-            ※このIDごとに設定や履歴が個別に保存されます。
+            お好きなIDとパスワードを決めて入力してください。<br>
+            ※履歴を消去しても、これらを入力すれば復元できます。
         </p>
-        <input type="text" id="secretInput" placeholder="例: takayama-1234">
-        <button class="btn-add" onclick="launchApp()">同期して開始</button>
+        <label>ユーザーID</label>
+        <input type="text" id="userIdInput" placeholder="例: yamada">
+        <label>パスワード</label>
+        <input type="password" id="userPassInput" placeholder="例: 1234">
+        <button class="btn-add" onclick="loginApp()">ログインして開始</button>
     </div>
 
     <div id="mainView" class="hidden">
@@ -119,8 +122,7 @@
                 <button class="menu-btn" onclick="openDetail('other')">その他管理</button>
                 <button class="menu-btn" onclick="openDetail('category')">カテゴリー割引設定</button>
                 <hr style="margin: 20px 0;">
-                <button onclick="logoutApp()" style="background:none; color:red; border:1px solid red;">ログアウト（ID変更）</button>
-                <p style="font-size:10px; color:#999; text-align:center; margin-top:10px;">※履歴消去後は再度ログインが必要です</p>
+                <button onclick="logoutApp()" style="background:none; color:red; border:1px solid red;">ログアウトする</button>
             </div>
             <div id="presetDetail" class="hidden">
                 <button class="btn-back" onclick="closeDetail()">← メニューへ戻る</button>
@@ -131,63 +133,83 @@
 </div>
 
 <script>
-    // --- Firebase構成 ---
-    const fbConfig = {
-        apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
-        authDomain: "my-app-eb01f.firebaseapp.com",
-        projectId: "my-app-eb01f",
-        storageBucket: "my-app-eb01f.firebasestorage.app",
-        messagingSenderId: "225201328715",
-        appId: "1:225201328715:web:952f9d2d3c4653543eb3ce"
-    };
+    // =========================================================================
+    // 【重要】ここでFirebaseの接続設定を行います
+    // 下記の「ここにAPIキーを入力してください」などを、ご自身の本物の鍵に書き換えてください。
+    // =========================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDh1IQWyr2Onn_hzKmew9yt5tYBt2fjk7c",
+  authDomain: "my-app-eb01f.firebaseapp.com",
+  projectId: "my-app-eb01f",
+  storageBucket: "my-app-eb01f.firebasestorage.app",
+  messagingSenderId: "225201328715",
+  appId: "1:225201328715:web:952f9d2d3c4653543eb3ce"
+};
     firebase.initializeApp(fbConfig);
     const db = firebase.firestore();
+    // =========================================================================
+
 
     let appKey = "";
-    let appData = { preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
+    let appData = { password:"", preset:{guard:[],lining:[],tailor:[],other:[]}, cards:[], catDisc:{}, prodDisc:{}, history:[], customCats:[] };
     let cProds = []; let cCoupons = []; let cDowns = [];
 
     // --- 起動 & 同期 ---
-    async function launchApp() {
-        const k = document.getElementById("secretInput").value.trim();
-        if(!k) return alert("ユーザーIDを入力してください");
-        appKey = k; 
-        localStorage.setItem("v22_user_id", appKey); // Safariが記憶している間は自動ログイン
-        await syncData();
+    async function loginApp() {
+        const uid = document.getElementById("userIdInput").value.trim();
+        const pass = document.getElementById("userPassInput").value.trim();
+        
+        if(!uid || !pass) return alert("ユーザーIDとパスワードの両方を入力してください");
+        
+        document.getElementById("syncIndicator").innerText = "認証中...";
+        appKey = uid;
+
+        try {
+            const doc = await db.collection("shared_users").doc(appKey).get();
+            if(doc.exists) {
+                appData = doc.data();
+                if(appData.password && appData.password !== pass) {
+                    document.getElementById("syncIndicator").innerText = "エラー";
+                    return alert("パスワードが違います。すでに他の人が使用しているIDの可能性があります。");
+                }
+                if(!appData.history) appData.history = [];
+                if(appData.cards) {
+                    appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
+                }
+            } else {
+                appData.password = pass;
+                appData.cards = [
+                    { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
+                    { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
+                ];
+                appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
+                appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
+                await pushData();
+            }
+            
+            localStorage.setItem("v24_user_id", uid);
+            localStorage.setItem("v24_user_pass", pass);
+            
+            document.getElementById("setupScreen").classList.add("hidden");
+            document.getElementById("mainView").classList.remove("hidden");
+            document.getElementById("syncIndicator").innerText = "接続中: " + appKey;
+            
+            refreshAllCalcUI();
+            if(!cProds.length) addProductRow();
+            
+        } catch(e) {
+            console.error(e);
+            alert("通信エラーが発生しました。Firebaseの設定やネット環境をご確認ください。");
+            document.getElementById("syncIndicator").innerText = "エラー";
+        }
     }
 
     function logoutApp() {
-        if(confirm("ログアウトしますか？（他のIDでログインできます）")) {
-            localStorage.removeItem("v22_user_id");
+        if(confirm("ログアウトしますか？")) {
+            localStorage.removeItem("v24_user_id");
+            localStorage.removeItem("v24_user_pass");
             location.reload();
         }
-    }
-
-    async function syncData() {
-        document.getElementById("syncIndicator").innerText = "同期中...";
-        document.getElementById("setupScreen").classList.add("hidden");
-        document.getElementById("mainView").classList.remove("hidden");
-
-        const doc = await db.collection("shared_users").doc(appKey).get();
-        if(doc.exists) {
-            appData = doc.data();
-            if(!appData.history) appData.history = [];
-            if(appData.cards) {
-                appData.cards.forEach(c => { if(!c.skip) c.skip = { "0": 0 }; });
-            }
-        } else {
-            // 新規IDの初期データ
-            appData.cards = [
-                { id:"c1", name:"ジャックスカード", pay:{12:1.2, 24:8.4}, skip:{0:0, 6:3.0} },
-                { id:"c2", name:"ショッピング・KL", pay:{12:1.0, 24:5.2}, skip:{0:0, 6:3.0} }
-            ];
-            appData.customCats = [{id:"cat1", name:"着物(袷)"}, {id:"cat2", name:"帯"}, {id:"cat3", name:"小物"}];
-            appData.customCats.forEach(c => appData.catDisc[c.id] = {student:0, member:0, instructor:0});
-            await pushData();
-        }
-        document.getElementById("syncIndicator").innerText = "接続中: " + appKey;
-        refreshAllCalcUI();
-        if(!cProds.length) addProductRow();
     }
 
     async function pushData() {
@@ -341,8 +363,13 @@
     }
 
     // --- 自動ログイン判定 ---
-    const savedK = localStorage.getItem("v22_user_id");
-    if(savedK) { document.getElementById("secretInput").value = savedK; launchApp(); }
+    const savedUid = localStorage.getItem("v24_user_id");
+    const savedPass = localStorage.getItem("v24_user_pass");
+    if(savedUid && savedPass) { 
+        document.getElementById("userIdInput").value = savedUid; 
+        document.getElementById("userPassInput").value = savedPass; 
+        loginApp(); 
+    }
 </script>
 </body>
 </html>
